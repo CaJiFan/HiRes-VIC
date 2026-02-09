@@ -1,55 +1,28 @@
-absl-py==2.4.0
-cloudpickle==3.1.2
-contourpy==1.3.3
-cycler==0.12.1
-etils==1.13.0
-Farama-Notifications==0.0.4
-filelock==3.20.3
-fonttools==4.61.1
-fsspec==2026.2.0
-glfw==2.10.0
-grpcio==1.78.0
-gymnasium==1.2.3
--e git+https://github.com/CaJiFan/HiRes-VIC.git@d97d7d6645a9f9addb2d737cfbcc76d2611e19b8#egg=hires_vic
-importlib_resources==6.5.2
-iniconfig==2.3.0
-Jinja2==3.1.6
-kiwisolver==1.4.9
-llvmlite==0.46.0
-Markdown==3.10.1
-MarkupSafe==3.0.3
-matplotlib==3.10.8
-mink==0.0.5
-mpmath==1.3.0
-mujoco==3.4.0
-networkx==3.6.1
-numba==0.63.1
-numpy==1.26.4
-opencv-python==4.11.0.86
-pandas==3.0.0
-pillow==12.1.0
-pluggy==1.6.0
-protobuf==6.33.5
-PyOpenGL==3.1.10
-pyparsing==3.3.2
-pytest==9.0.2
-python-dateutil==2.9.0.post0
-qpsolvers==4.8.2
-quadprog==0.1.13
-robosuite==1.5.2
-scipy==1.17.0
-setuptools==80.10.2
-six==1.17.0
-stable_baselines3==2.7.1
-sympy==1.14.0
-tensorboard==2.20.0
-tensorboard-data-server==0.7.2
-termcolor==3.3.0
-torch==2.11.0.dev20260208
-torchaudio==2.11.0.dev20260208
-torchvision==0.26.0.dev20260208
-tqdm==4.67.3
-typing_extensions==4.15.0
-Werkzeug==3.1.5
-wheel==0.46.3
-zipp==3.23.0
+# --- Core Math & Physics ---
+# Critical: Robosuite/MuJoCo often break with Numpy 2.0+. We pin it to <2.0 for stability.
+numpy<2.0
+scipy
+
+# --- Simulation & Environment ---
+mujoco>=3.1.1
+robosuite>=1.4.0
+gymnasium>=0.29.0
+
+# --- Reinforcement Learning ---
+stable-baselines3>=2.2.0
+tensorboard
+shimmy>=1.0.0
+
+# --- Utilities ---
+h5py
+imageio
+opencv-python-headless
+tqdm
+matplotlib
+
+# --- PyTorch (CPU Only Configuration) ---
+# This tells pip to look for CPU wheels first.
+# On Mac, it falls back to PyPI (Standard).
+# On Linux, it grabs the lightweight CPU version.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
