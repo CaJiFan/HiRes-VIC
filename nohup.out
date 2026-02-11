@@ -1,0 +1,264 @@
+==================================================
+Starting PPO on Door for 500000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished SAC on Door
+==================================================
+Starting PPO on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished SAC on NutAssemblySquare
+==================================================
+Starting PPO on Wipe for 1000000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 1000000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished SAC on Wipe
+==================================================
+Starting PPO on NutAssemblyRound for 1000000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 1000000 steps...
+Date: lun 09 feb 2026 11:39:48 CET
+==================================================
+Finished SAC on NutAssemblyRound
+All experiments completed!
+==================================================
+Starting PPO on Door for 500000 steps...
+Date: lun 09 feb 2026 11:41:49 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: lun 09 feb 2026 11:50:08 CET
+==================================================
+Finished SAC on Door
+==================================================
+Starting PPO on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 13:04:02 CET
+==================================================
+run_experiments.sh: line 4: 21209 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS > logs/${ENV_NAME}_${ALGO}.log 2>&1
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 13:04:33 CET
+==================================================
+run_experiments.sh: line 4: 21871 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS > logs/${ENV_NAME}_${ALGO}.log 2>&1
+Finished SAC on NutAssemblySquare
+==================================================
+Starting PPO on Wipe for 1000000 steps...
+Date: lun 09 feb 2026 13:04:46 CET
+==================================================
+run_experiments.sh: line 4: 22099 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS > logs/${ENV_NAME}_${ALGO}.log 2>&1
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 1000000 steps...
+Date: lun 09 feb 2026 13:04:52 CET
+==================================================
+run_experiments.sh: line 4: 22570 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS > logs/${ENV_NAME}_${ALGO}.log 2>&1
+Finished SAC on Wipe
+==================================================
+Starting PPO on NutAssemblyRound for 1000000 steps...
+Date: lun 09 feb 2026 13:04:57 CET
+==================================================
+run_experiments.sh: line 4: 22781 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS > logs/${ENV_NAME}_${ALGO}.log 2>&1
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 1000000 steps...
+Date: lun 09 feb 2026 13:05:08 CET
+==================================================
+==================================================
+Starting PPO on Door for 500000 steps...
+Date: lun 09 feb 2026 13:10:20 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: lun 09 feb 2026 13:19:06 CET
+==================================================
+Finished SAC on Door
+==================================================
+Starting PPO on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 14:11:43 CET
+==================================================
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 14:22:04 CET
+==================================================
+Finished SAC on NutAssemblySquare
+==================================================
+Starting PPO on Wipe for 1000000 steps...
+Date: lun 09 feb 2026 15:19:04 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 1000000 steps...
+Date: lun 09 feb 2026 15:46:00 CET
+==================================================
+Finished SAC on Wipe
+==================================================
+Starting PPO on NutAssemblyRound for 1000000 steps...
+Date: lun 09 feb 2026 17:43:25 CET
+==================================================
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 1000000 steps...
+Date: lun 09 feb 2026 18:04:14 CET
+==================================================
+Finished SAC on NutAssemblyRound
+All experiments completed!
+==================================================
+Starting PPO on Door for 500000 steps...
+Date: lun 09 feb 2026 22:29:22 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: lun 09 feb 2026 22:38:11 CET
+==================================================
+Finished SAC on Door
+==================================================
+Starting PPO on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 23:31:24 CET
+==================================================
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 500000 steps...
+Date: lun 09 feb 2026 23:41:41 CET
+==================================================
+Finished SAC on NutAssemblySquare
+==================================================
+Starting PPO on Wipe for 1000000 steps...
+Date: mar 10 feb 2026 00:37:12 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 1000000 steps...
+Date: mar 10 feb 2026 00:57:00 CET
+==================================================
+Finished SAC on Wipe
+==================================================
+Starting PPO on NutAssemblyRound for 1000000 steps...
+Date: mar 10 feb 2026 02:52:59 CET
+==================================================
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 1000000 steps...
+Date: mar 10 feb 2026 03:13:41 CET
+==================================================
+Finished SAC on NutAssemblyRound
+All experiments completed!
+==================================================
+Starting PPO on Door for 500000 steps...
+Date: mar 10 feb 2026 13:03:53 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: mar 10 feb 2026 13:10:18 CET
+==================================================
+==================================================
+Starting PPO on Door for 500000 steps...
+Date: mar 10 feb 2026 13:28:28 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: mar 10 feb 2026 13:41:52 CET
+==================================================
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: mar 10 feb 2026 14:44:48 CET
+==================================================
+==================================================
+Starting SAC on Door for 500000 steps...
+Date: mar 10 feb 2026 15:26:54 CET
+==================================================
+==================================================
+Starting TD3 on Door for 500000 steps...
+Date: mar 10 feb 2026 15:31:17 CET
+==================================================
+Finished TD3 on Door
+==================================================
+Starting TQC on Door for 500000 steps...
+Date: mar 10 feb 2026 15:44:55 CET
+==================================================
+Finished TQC on Door
+==================================================
+Starting PPO on NutAssemblySquare for 500000 steps...
+Date: mar 10 feb 2026 16:05:58 CET
+==================================================
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 500000 steps...
+Date: mar 10 feb 2026 16:13:01 CET
+==================================================
+Finished SAC on NutAssemblySquare
+==================================================
+Starting TD3 on NutAssemblySquare for 500000 steps...
+Date: mar 10 feb 2026 17:05:24 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 500000 steps...
+Date: mar 10 feb 2026 17:19:52 CET
+==================================================
+Finished TQC on NutAssemblySquare
+==================================================
+Starting PPO on Wipe for 1000000 steps...
+Date: mar 10 feb 2026 17:41:52 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 1000000 steps...
+Date: mar 10 feb 2026 17:59:49 CET
+==================================================
+Finished SAC on Wipe
+==================================================
+Starting TD3 on Wipe for 1000000 steps...
+Date: mar 10 feb 2026 19:57:37 CET
+==================================================
+Finished TD3 on Wipe
+==================================================
+Starting TQC on Wipe for 1000000 steps...
+Date: mar 10 feb 2026 20:38:33 CET
+==================================================
+Finished TQC on Wipe
+==================================================
+Starting PPO on NutAssemblyRound for 1000000 steps...
+Date: mar 10 feb 2026 21:31:26 CET
+==================================================
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 1000000 steps...
+Date: mar 10 feb 2026 21:45:31 CET
+==================================================
+Finished SAC on NutAssemblyRound
+==================================================
+Starting TD3 on NutAssemblyRound for 1000000 steps...
+Date: mar 10 feb 2026 23:32:00 CET
+==================================================
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 1000000 steps...
+Date: mié 11 feb 2026 00:01:00 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All experiments completed!

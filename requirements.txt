@@ -24,5 +24,5 @@ matplotlib
 # This tells pip to look for CPU wheels first.
 # On Mac, it falls back to PyPI (Standard).
 # On Linux, it grabs the lightweight CPU version.
---extra-index-url https://download.pytorch.org/whl/cpu
+# --extra-index-url https://download.pytorch.org/whl/cpu
 torch

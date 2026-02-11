@@ -28,7 +28,6 @@ class RobosuiteGymnasiumWrapper(gym.Env):
             use_camera_obs=use_camera_obs,
             use_object_obs=True,
             reward_shaping=True,
-            control_freq=20,
             **task_kwargs # Pass any remaining arguments (like horizon, etc.)
         )
 
@@ -82,6 +81,7 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         """
         Gymnasium step returns (obs, reward, terminated, truncated, info).
         """
+        # print(f"Action shape: {action.shape}")  # Debug print to check action values
         obs_dict, reward, done, info = self.env.step(action)
         
         flat_obs = self._flatten_obs(obs_dict)
