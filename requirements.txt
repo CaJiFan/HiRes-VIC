@@ -27,3 +27,5 @@ matplotlib
 # On Linux, it grabs the lightweight CPU version.
 # --extra-index-url https://download.pytorch.org/whl/cpu
 torch
+
+seaborn
