@@ -10,6 +10,7 @@ gymnasium>=0.29.0
 
 # --- Reinforcement Learning ---
 stable-baselines3>=2.2.0
+sb3-contrib>=2.2.0  # For TQC and RecurrentPPO
 tensorboard
 shimmy>=1.0.0
 

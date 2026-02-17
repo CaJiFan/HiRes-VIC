@@ -66,8 +66,6 @@ def main():
     elif args.algorithm == "TQC":
         model = TQC.load(model_path)
     
-    
-    # 4. Evaluation Loop
     obs, _ = env.reset()
     print("Running evaluation... Press Ctrl+C to stop.")
     

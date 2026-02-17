@@ -58,6 +58,8 @@ miniconda3/
 */wandb/
 */mlruns/
 
+logs/
+
 # Ignore saved models and checkpoints (These are huge)
 checkpoints/
 models/
@@ -70,6 +72,8 @@ models/
 videos/
 *.mp4
 *.gif
+
+plots/
 
 # ==========================
 # Robotics & Simulation

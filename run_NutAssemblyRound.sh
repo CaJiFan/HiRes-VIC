@@ -5,7 +5,7 @@ run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="VIC_FT"
+    EXP_NAME="VIC_5M"
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -28,30 +28,11 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-# --- 1. Door (Baseline) ---
-# run_train "Door" "PPO" 500000
-# run_train "Door" "SAC" 500000
-run_train "Door" "TD3" 500000
-run_train "Door" "TQC" 500000
-
-# --- 2. NutAssemblySquare (Easy Alignment) ---
-run_train "NutAssemblySquare" "PPO" 500000
-run_train "NutAssemblySquare" "SAC" 500000
-run_train "NutAssemblySquare" "TD3" 500000
-run_train "NutAssemblySquare" "TQC" 500000
-
-# --- 3. Wipe (Impedance / Force) ---
-# Increased steps because force control is harder to learn
-run_train "Wipe" "PPO" 1000000
-run_train "Wipe" "SAC" 1000000
-run_train "Wipe" "TD3" 1000000
-run_train "Wipe" "TQC" 1000000
-
 # --- 4. NutAssemblyRound (Precision Geometry) ---
 # Hardest task, needs the most time
-run_train "NutAssemblyRound" "PPO" 1000000
-run_train "NutAssemblyRound" "SAC" 1000000
-run_train "NutAssemblyRound" "TD3" 1000000
-run_train "NutAssemblyRound" "TQC" 1000000
+run_train "NutAssemblyRound" "PPO" 5000000
+run_train "NutAssemblyRound" "SAC" 5000000
+run_train "NutAssemblyRound" "TD3" 5000000
+run_train "NutAssemblyRound" "TQC" 5000000
 
-echo "All experiments completed!"
+echo "All NutAssemblyRound experiments completed!"
