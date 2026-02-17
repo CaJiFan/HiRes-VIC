@@ -93,11 +93,11 @@ def plot_custom(df):
         if is_wiping:
             fig, axes = plt.subplots(1, 2, figsize=(16, 6))
             plot_configs = [(axes[0], "Average Reward"), (axes[1], "Episode Length")]
-            fig.suptitle(f"{env} (VIC)", fontsize=20, weight='bold')
+            fig.suptitle(f"{env} - VIC", fontsize=20, weight='bold')
         else:
             fig, ax = plt.subplots(1, 1, figsize=(10, 6))
             plot_configs = [(ax, "Average Reward")]
-            fig.suptitle(f"{env} (VIC)", fontsize=18, weight='bold')
+            fig.suptitle(f"{env} - VIC", fontsize=18, weight='bold')
 
         for ax, metric in plot_configs:
             metric_data = env_data[env_data["Metric"] == metric]
