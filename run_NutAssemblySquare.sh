@@ -5,7 +5,7 @@ run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="VIC_5M"
+    EXP_NAME="forcepenalty_0.02_maxforce_35N_VIC"
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -29,9 +29,9 @@ run_train() {
 mkdir -p logs
 
 # --- 2. NutAssemblySquare (Easy Alignment) ---
-# run_train "NutAssemblySquare" "PPO" 5000000
-# run_train "NutAssemblySquare" "SAC" 5000000
-# run_train "NutAssemblySquare" "TD3" 5000000
-run_train "NutAssemblySquare" "TQC" 5000000
+run_train "NutAssemblySquare" "PPO" 3_000_000
+run_train "NutAssemblySquare" "SAC" 3_000_000
+run_train "NutAssemblySquare" "TD3" 3_000_000
+run_train "NutAssemblySquare" "TQC" 3_000_000
 
 echo "All NutAssemblySquare experiments completed!"

@@ -5,7 +5,7 @@ run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="VIC_5M"
+    EXP_NAME="forcepenalty_0.02_maxforce_35N_VIC"
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -29,9 +29,9 @@ run_train() {
 mkdir -p logs
 
 # --- 1. Door (Baseline) ---
-run_train "Door" "PPO" 500000
-run_train "Door" "SAC" 500000
-run_train "Door" "TD3" 500000
-run_train "Door" "TQC" 500000
+run_train "Door" "PPO" 1_000_000
+run_train "Door" "SAC" 1_000_000
+run_train "Door" "TD3" 1_000_000
+run_train "Door" "TQC" 1_000_000
 
 echo "All Door experiments completed!"

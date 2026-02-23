@@ -32,6 +32,7 @@ env/
 anaconda3/
 miniconda3/
 
+wandb/
 # ==========================
 # Mac OS (Since you are on M4)
 # ==========================

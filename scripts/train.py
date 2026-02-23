@@ -1,3 +1,10 @@
+import os 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import wandb
+from wandb.integration.sb3 import WandbCallback
+
 import torch
 import numpy as np
 from stable_baselines3 import PPO, SAC, TD3
@@ -7,14 +14,13 @@ except ImportError:
     print("TQC not found. Please install sb3-contrib: `pip install sb3-contrib`")
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from stable_baselines3.common.callbacks import CheckpointCallback
+from hires_vic.utils.callbacks import RobosuiteLoggingCallback
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 
 from robosuite import load_composite_controller_config
+import robosuite as suite
+from hires_vic.envs.gymnasium_wrapper import RobosuiteGymnasiumWrapper, RobosuitePhysicsWrapper
 
-import os 
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from hires_vic.envs.gymnasium_wrapper import RobosuiteGymnasiumWrapper
 
 def parse_args():
     import argparse
@@ -33,8 +39,9 @@ def make_env(run_name, env_name, rank, seed=0):
     """
     def _init():
         controller_config = None
+        is_vic = "VIC" in run_name
 
-        if "VIC" in run_name:
+        if is_vic:
             controller_config = load_composite_controller_config(controller="BASIC", robot="panda")
             # print(f"Initial Controller: {controller_config}")
 
@@ -53,22 +60,37 @@ def make_env(run_name, env_name, rank, seed=0):
             # We let the agent learn this or auto-scale it.
             arm_config["damping_ratio_limits"] = [1.0, 1.0] # Force critical damping
             # print(f"Using VIC controller config: {controller_config}")
-
         
-        horizon = 1000 # Default horizon
-        if env_name == "Door":
-            horizon = 500
+        task_kwargs = {
+            "has_renderer": False,
+            "has_offscreen_renderer": False,
+            "use_camera_obs": False,
+            "reward_shaping": True,       # <--- SET TO TRUE (Dense rewards)
+            "horizon": 500 if env_name == "Door" else 1000, # Shorter episodes for Door
+            "control_freq": 20,              # 20 Hz control frequency (50ms per step)
+        }
         
         env = RobosuiteGymnasiumWrapper(
             env_name=env_name,
             robots="Panda",
             controller_configs=controller_config,
-            task_kwargs={
-                "has_renderer": False,
-                "horizon": horizon, 
-                "control_freq": 50
-            }
+            task_kwargs=task_kwargs
         )
+        
+        stiff_penalty = 0.01 if is_vic else 0.0
+        
+        env = RobosuitePhysicsWrapper(
+            env, 
+            stiffness_penalty=stiff_penalty, 
+            force_penalty=0.02, 
+            max_force_threshold=35.0
+        )
+
+        print(f"Initialized environment: {env_name} | VIC Mode: {is_vic}")
+        print(f"Applying stiffness penalty: {stiff_penalty}")
+        print(f"Max force threshold: 35.0N")
+        print(f"Force penalty: 0.02 per Newton above threshold")
+       
         env.reset(seed=seed + rank) # Distinct seed for each worker
         return env
     return _init
@@ -77,15 +99,26 @@ def make_env(run_name, env_name, rank, seed=0):
 def main():
     args = parse_args()
 
-    # if args.algorithm in ["SAC", "TD3", "TQC"]:
-    #     args.n_envs = min(args.n_envs, 4) # Cap envs to 4 to save GPU memory/CPU
-    #     print(f"Algorithm is {args.algorithm}: Clamping n_envs to {args.n_envs}")
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Training on {device.upper()} with {args.n_envs} parallel environments.")
 
     env_name = args.env
-    run_name = f'{args.algorithm}_{env_name.lower()}_{device}_{args.run_name}'
+    run_name = f'{args.algorithm}_{env_name.lower()}_{args.run_name}'
+
+    wandb.init(
+        project="HiRes-VIC",          # Name of your project dashboard
+        name=run_name,                # Name of this specific run
+        sync_tensorboard=True,        # MAGIC: Automatically uploads SB3 & Custom metrics!
+        monitor_gym=True,             # Auto-logs video if your env produces them
+        save_code=True,               # Saves your train.py so you know what code you ran
+        config={
+            "algorithm": args.algorithm,
+            "env": args.env,
+            "total_timesteps": args.total_timesteps,
+            "n_envs": args.n_envs,
+            "is_vic": "VIC" in run_name
+        }
+    )
 
     # Create Vectorized Environment
     env_fns = [make_env(run_name, args.env, i) for i in range(args.n_envs)]
@@ -240,16 +273,6 @@ def main():
 
         # ------------------------------------------------------------------
    
-    # UNIVERSAL REPLAY BUFFER CHECK (For SAC, TD3, TQC)
-    # ------------------------------------------------------------------
-    if args.checkpoint and args.algorithm in ["SAC", "TD3", "TQC"]:
-        # Check if buffer is empty
-        if model.replay_buffer is None or model.replay_buffer.size() == 0:
-            print(f">>> WARNING: {args.algorithm} Replay Buffer is EMPTY.")
-            print("    The agent has 'Amnesia'. It knows the policy but forgot past experiences.")
-            print("    Training will be flat for a while until it collects new data.")
-    # ------------------------------------------------------------------
-
 
     remaining_steps = args.total_timesteps - model.num_timesteps
     if remaining_steps <= 0:
@@ -266,12 +289,20 @@ def main():
         save_replay_buffer=True,
         save_vecnormalize=True
     )
+
+    logging_callback = RobosuiteLoggingCallback()
+
+    wandb_callback = WandbCallback(
+        gradient_save_freq=0,
+        model_save_path=None,
+        verbose=2,
+    )
     
     # Train
     print(f"Starting training for {run_name}...")
     model.learn(
         total_timesteps=remaining_steps, 
-        callback=checkpoint_callback, 
+        callback=[checkpoint_callback, logging_callback, wandb_callback], 
         reset_num_timesteps=False
     )
     

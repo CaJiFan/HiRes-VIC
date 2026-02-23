@@ -5,7 +5,7 @@ run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="VIC_5M"
+    EXP_NAME="forcepenalty_0.02_maxforce_35N_VIC"
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -30,9 +30,9 @@ mkdir -p logs
 
 # --- 4. NutAssemblyRound (Precision Geometry) ---
 # Hardest task, needs the most time
-run_train "NutAssemblyRound" "PPO" 5000000
-run_train "NutAssemblyRound" "SAC" 5000000
-run_train "NutAssemblyRound" "TD3" 5000000
-run_train "NutAssemblyRound" "TQC" 5000000
+run_train "NutAssemblyRound" "PPO" 3_000_000
+run_train "NutAssemblyRound" "SAC" 3_000_000
+run_train "NutAssemblyRound" "TD3" 3_000_000
+run_train "NutAssemblyRound" "TQC" 3_000_000
 
 echo "All NutAssemblyRound experiments completed!"
