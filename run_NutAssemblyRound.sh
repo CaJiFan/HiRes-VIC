@@ -5,7 +5,7 @@ run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="forcepenalty_0.02_maxforce_35N_VIC"
+    EXP_NAME="GRL_OSC_VIC"
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -28,10 +28,8 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-# --- 4. NutAssemblyRound (Precision Geometry) ---
-# Hardest task, needs the most time
-run_train "NutAssemblyRound" "PPO" 3_000_000
-run_train "NutAssemblyRound" "SAC" 3_000_000
+# run_train "NutAssemblyRound" "PPO" 3_000_000
+# run_train "NutAssemblyRound" "SAC" 3_000_000
 run_train "NutAssemblyRound" "TD3" 3_000_000
 run_train "NutAssemblyRound" "TQC" 3_000_000
 

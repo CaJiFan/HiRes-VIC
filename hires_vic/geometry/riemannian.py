@@ -1,3 +1,4 @@
+import math
 import torch
 
 def spd_cholesky_map(params: torch.Tensor) -> torch.Tensor:
@@ -25,4 +26,35 @@ def spd_cholesky_map(params: torch.Tensor) -> torch.Tensor:
     
     # Compute K = L @ L.T
     K = torch.bmm(L, L.transpose(1, 2))
+    return K
+
+def spd_grl_map(params: torch.Tensor) -> torch.Tensor:
+    """
+    Exact implementation of the G-RL SPD mapping.
+    Mandel Basis -> Symmetric Matrix -> Matrix Exponential -> SPD Matrix
+    """
+    batch_size = params.shape[0]
+    S = torch.zeros((batch_size, 3, 3), device=params.device)
+    
+    # Diagonals
+    S[:, 0, 0] = params[:, 0]
+    S[:, 1, 1] = params[:, 1]
+    S[:, 2, 2] = params[:, 2]
+    
+    # Off-diagonals (Scaled by 1/sqrt(2) to preserve the Mandel isometric mapping)
+    # Note: The NN outputs the Mandel coordinates, we scale them back to matrix entries
+    inv_sqrt2 = 1.0 / math.sqrt(2.0) 
+    
+    S[:, 0, 1] = params[:, 3] * inv_sqrt2
+    S[:, 1, 0] = params[:, 3] * inv_sqrt2
+    
+    S[:, 0, 2] = params[:, 4] * inv_sqrt2
+    S[:, 2, 0] = params[:, 4] * inv_sqrt2
+    
+    S[:, 1, 2] = params[:, 5] * inv_sqrt2
+    S[:, 2, 1] = params[:, 5] * inv_sqrt2
+    
+    # Riemannian Exponential Map (Matrix Exponential)
+    K = torch.linalg.matrix_exp(S)
+    
     return K

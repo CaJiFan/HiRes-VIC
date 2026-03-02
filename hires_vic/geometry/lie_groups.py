@@ -1,49 +1,49 @@
 import torch
 
 def so3_exp_map(omega: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the Exponential Map from Lie Algebra so(3) to Lie Group SO(3).
-        Input: omega (batch_size, 3) -> Axis-angle vectors (tangent space)
-        Output: R (batch_size, 3, 3) -> Rotation matrices
-        
-        Ref: "The network provides an output s_tau in R^3... action a = Exp(s_tau)".
-        """
-        batch_size = omega.shape[0]
-        theta = torch.norm(omega, dim=1, keepdim=True)
-        epsilon = 1e-6
-        
-        # Handle small angles (Taylor expansion) to avoid division by zero
-        # This is crucial for RL stability near convergence
-        mask = theta < epsilon
-        
-        # Normalized axis
-        u = omega / (theta + 1e-8)
-        
-        # Skew-symmetric matrices K
-        K = torch.zeros((batch_size, 3, 3), device=omega.device)
-        K[:, 0, 1] = -u[:, 2]
-        K[:, 0, 2] = u[:, 1]
-        K[:, 1, 0] = u[:, 2]
-        K[:, 1, 2] = -u[:, 0]
-        K[:, 2, 0] = -u[:, 1]
-        K[:, 2, 1] = u[:, 0]
-        
-        # Rodrigues' Formula
-        I = torch.eye(3, device=omega.device).unsqueeze(0).repeat(batch_size, 1, 1)
-        R = I + torch.sin(theta).unsqueeze(-1) * K + (1 - torch.cos(theta)).unsqueeze(-1) * torch.bmm(K, K)
-        
-        # For very small angles, R approx I + K (linear approximation)
-        R[mask.squeeze()] = I[mask.squeeze()] + K[mask.squeeze()]
-        
-        return R
+    """
+    Computes the Exponential Map from Lie Algebra so(3) to Lie Group SO(3).
+    """
+    batch_size = omega.shape[0]
+    theta = torch.norm(omega, dim=1, keepdim=True)
+    epsilon = 1e-6
+    
+    # 1. Unnormalized Skew-Symmetric Matrix [omega]_x
+    # (Used for the safe small-angle approximation)
+    K_omega = torch.zeros((batch_size, 3, 3), device=omega.device)
+    K_omega[:, 0, 1] = -omega[:, 2]
+    K_omega[:, 0, 2] = omega[:, 1]
+    K_omega[:, 1, 0] = omega[:, 2]
+    K_omega[:, 1, 2] = -omega[:, 0]
+    K_omega[:, 2, 0] = -omega[:, 1]
+    K_omega[:, 2, 1] = omega[:, 0]
+
+    # 2. Normalized Skew-Symmetric Matrix K_u
+    u = omega / (theta + 1e-8)
+    K_u = torch.zeros((batch_size, 3, 3), device=omega.device)
+    K_u[:, 0, 1] = -u[:, 2]
+    K_u[:, 0, 2] = u[:, 1]
+    K_u[:, 1, 0] = u[:, 2]
+    K_u[:, 1, 2] = -u[:, 0]
+    K_u[:, 2, 0] = -u[:, 1]
+    K_u[:, 2, 1] = u[:, 0]
+
+    # 3. Rodrigues' Formula
+    I = torch.eye(3, device=omega.device).unsqueeze(0).repeat(batch_size, 1, 1)
+    
+    theta_unsqueeze = theta.unsqueeze(-1)
+    R_standard = I + torch.sin(theta_unsqueeze) * K_u + (1 - torch.cos(theta_unsqueeze)) * torch.bmm(K_u, K_u)
+
+    # 4. Safe branching for small angles: exp([w]x) approx I + [w]x
+    mask = (theta < epsilon).view(-1, 1, 1)
+    R = torch.where(mask, I + K_omega, R_standard)
+
+    return R
+
 
 def so3_log_map(R: torch.Tensor) -> torch.Tensor:
     """
     Computes the Logarithm Map from SO(3) to so(3).
-    Input: R (batch_size, 3, 3)
-    Output: omega (batch_size, 3) -> Geodesic error vector
-    
-    Ref: "Instead of feeding orientation state s... we pass the associated Lie algebra element Log(s)".
     """
     batch_size = R.shape[0]
     epsilon = 1e-6
@@ -54,20 +54,20 @@ def so3_log_map(R: torch.Tensor) -> torch.Tensor:
     
     theta = torch.acos(cos_theta)
     
-    # Standard case
-    factor = theta / (2 * torch.sin(theta))
+    # Extract the difference of off-diagonals
+    diff = torch.zeros((batch_size, 3), device=R.device)
+    diff[:, 0] = R[:, 2, 1] - R[:, 1, 2]
+    diff[:, 1] = R[:, 0, 2] - R[:, 2, 0]
+    diff[:, 2] = R[:, 1, 0] - R[:, 0, 1]
     
-    omega = torch.zeros((batch_size, 3), device=R.device)
-    omega[:, 0] = R[:, 2, 1] - R[:, 1, 2]
-    omega[:, 1] = R[:, 0, 2] - R[:, 2, 0]
-    omega[:, 2] = R[:, 1, 0] - R[:, 0, 1]
+    # Safely compute the scaling factor to avoid 0/0 NaNs
+    # For very small theta, theta / (2*sin(theta)) -> 0.5
+    factor_standard = theta / (2 * torch.sin(theta) + 1e-8)
+    factor_small = 0.5 * torch.ones_like(theta)
     
-    omega = omega * factor.unsqueeze(-1)
+    mask = (theta < epsilon)
+    factor = torch.where(mask, factor_small, factor_standard)
     
-    # Handle singularity at theta near 0
-    mask = theta < epsilon
-    omega[mask] = 0.5 * omega[mask] # Linear approx
+    omega = diff * factor.unsqueeze(-1)
     
     return omega
-
- 

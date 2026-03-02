@@ -1,7 +1,12 @@
+import torch
+import math
 import gymnasium as gym
 import numpy as np
 import robosuite as suite
 from gymnasium import spaces
+from hires_vic.geometry.riemannian import spd_grl_map
+from hires_vic.geometry.lie_groups import so3_log_map
+from robosuite.utils import transform_utils as T
 
 class RobosuiteGymnasiumWrapper(gym.Env):
     def __init__(self, env_name, robots, controller_configs=None, task_kwargs=None):
@@ -37,18 +42,37 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         # Robosuite actions are usually [dx, dy, dz, ax, ay, az, gripper]
         # low, high = self.env.action_spec
         self.real_low, self.real_high = self.env.action_spec
+        # print(f"Robosuite Action Spec: Low={self.real_low}, High={self.real_high}")
         # self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
-        self.action_space = spaces.Box(
-            low=-1.0, 
-            high=1.0, 
-            shape=self.real_low.shape, 
-            dtype=np.float32
-        )
+        self.is_grl_controller = controller_configs is not None and "GRL_OSC" in str(controller_configs)
+        
+        if self.is_grl_controller:
+            # GRL Arm always needs exactly 15 dimensions (6 Mandel + 3 RotKp + 3 Pos + 3 Ori)
+            # Anything leftover in Robosuite's native action_dim belongs to the gripper
+            gripper_dim = self.env.action_dim - 18
+            sb3_action_dim = 15 + gripper_dim
+            
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(sb3_action_dim,), dtype=np.float32)
+            
+            print("\n" + "="*50)
+            print(f"🚀 GRL CONTROLLER DETECTED")
+            print(f"▶️ Native Env Dim: {self.env.action_dim} | Gripper Dim: {gripper_dim}")
+            print(f"▶️ Overriding SB3 Action Space to {sb3_action_dim}!")
+            print("="*50 + "\n")
+        else:
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(self.env.action_dim,), dtype=np.float32)
+            print(f"▶️ Standard Controller Detected: Action space set to {self.env.action_dim}")
+
 
         # 3. Define Observation Space
         # We need to run one reset to see the shape of the observations
         obs = self.env.reset()
+        # print(f"Robosuite Observation Keys: {obs.keys()}")
+        # print(f"Sample Observation Shapes: {{key: np.array(value).shape for key, value in obs.items()}}")
         flat_obs = self._flatten_obs(obs)
+
+        # print('▶️ Observation space shape after flattening: ', flat_obs.shape)
+
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=flat_obs.shape, dtype=np.float32
         )
@@ -57,18 +81,33 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         """
         Flattens the Robosuite dictionary obs into a single vector for the RL agent.
         Selects only the useful keys (proprioception + object state).
+        Applies Lie Group Logarithmic Map to orientation if using GRL.
         """
         keys_to_use = ['robot0_eef_pos', 'robot0_eef_quat', 'robot0_gripper_qpos', 'object-state']
         
-        # Note: 'object-state' might be named differently depending on the task (e.g. 'door_pos')
-        # Check obs_dict.keys() if you switch tasks.
         values = []
         for key in keys_to_use:
-            if key in obs_dict:
-                values.append(np.array(obs_dict[key]).flatten())
+            if key not in obs_dict:
+                continue
+                
+            if key == 'robot0_eef_quat' and getattr(self, 'is_grl_controller', False):
+                # --- LIE GROUP OBSERVATION MAPPING ---
+                # 1. Get Robosuite's native 4D quaternion (x, y, z, w)
+                quat = obs_dict[key]
+                
+                # 2. Convert Quaternion to 3x3 Rotation Matrix (The Lie Group SO(3))
+                rot_mat = T.quat2mat(quat)
+                
+                # 3. Convert to PyTorch tensor with batch dimension for your map
+                rot_tensor = torch.tensor(rot_mat, dtype=torch.float32).unsqueeze(0)
+                
+                # 4. Apply Log Map to get the 3D axis-angle vector (The Lie Algebra so(3))
+                omega = so3_log_map(rot_tensor).squeeze(0).detach().numpy()
+                
+                values.append(omega)
             else:
-                # Fallback for task-specific keys if strictly needed
-                pass 
+                # Standard Euclidean flattening
+                values.append(np.array(obs_dict[key]).flatten())
         
         return np.concatenate(values).astype(np.float32)
 
@@ -86,21 +125,76 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         flat_obs = self._flatten_obs(obs_dict)
         return flat_obs, {}
 
+    # def step(self, action):
+    #     """
+    #     Gymnasium step returns (obs, reward, terminated, truncated, info).
+    #     """
+    #     # print(f"Action shape: {action.shape}")  # Debug print to check action values
+    #     scaled_action = self.real_low + (0.5 * (action + 1.0) * (self.real_high - self.real_low))
+    #     obs_dict, reward, done, info = self.env.step(scaled_action)
+
+    #     raw_success = self.env._check_success()
+    #     info["is_success"] = bool(raw_success)
+        
+    #     flat_obs = self._flatten_obs(obs_dict)
+        
+    #     # Robosuite returns 'done' as a boolean. 
+    #     # In Gymnasium, we split this into 'terminated' (task success/fail) and 'truncated' (timeout).
+    #     # Since Robosuite usually handles timeout internally, we can treat done as terminated.
+    #     terminated = done
+    #     truncated = False # You can add a step counter here if you want strict timeouts
+        
+    #     return flat_obs, reward, terminated, truncated, info
+    
     def step(self, action):
-        """
-        Gymnasium step returns (obs, reward, terminated, truncated, info).
-        """
-        # print(f"Action shape: {action.shape}")  # Debug print to check action values
-        scaled_action = self.real_low + (0.5 * (action + 1.0) * (self.real_high - self.real_low))
-        obs_dict, reward, done, info = self.env.step(scaled_action)
+        # action from SB3 is strictly in [-1, 1]
+        # print(f'len(action): {len(action)}')  # Debug print to check action values
+        if getattr(self, 'is_grl_controller', False):
+            mandel_params = action[0:6].copy()
+            min_kp, max_kp = 10.0, 200.0
+            log_min = math.log(min_kp)
+            log_max = math.log(max_kp)
+            
+            mandel_params[0:3] = log_min + 0.5 * (mandel_params[0:3] + 1.0) * (log_max - log_min)
+            # off_diag_scale = (log_max - log_min) / 2.0
+            off_diag_scale = 0.2
+            mandel_params[3:6] = mandel_params[3:6] * off_diag_scale
+            
+            mandel_tensor = torch.tensor(mandel_params, dtype=torch.float32).unsqueeze(0)
+            Kp_matrix = spd_grl_map(mandel_tensor).squeeze(0).detach().numpy()
+            Kp_flat = Kp_matrix.flatten() 
+            
+            # --- 2. ROTATIONAL STIFFNESS ---
+            kp_rot_raw = action[6:9]
+            kp_rot_scaled = min_kp + 0.5 * (kp_rot_raw + 1.0) * (max_kp - min_kp)
+            
+            # --- 3. CONSTRUCT TASK-AGNOSTIC ROBOSUITE ACTION ---
+            # action[15:] will safely grab the 1 gripper command for NutAssembly, 
+            # or it will return an empty array [] for Wipe!
+            robosuite_action = np.concatenate([
+                Kp_flat,             # 9 elements
+                kp_rot_scaled,       # 3 elements
+                action[9:12],        # 3 elements
+                action[12:15],       # 3 elements
+                action[15:]          # Remaining elements (Gripper, if any)
+            ])
+            # print(f"GRL Action: {action}")
+            # print(f"Mapped Robosuite Action: {robosuite_action}")
+            obs_dict, reward, done, info = self.env.step(robosuite_action)
+            
+        else:
+            # Your standard baseline execution
+            # print('real high: ', self.real_high)
+            # print('real low: ', self.real_low)
+            scaled_action = self.real_low + (0.5 * (action + 1.0) * (self.real_high - self.real_low))
+            obs_dict, reward, done, info = self.env.step(scaled_action)
+
+        raw_success = self.env._check_success()
+        info["is_success"] = bool(raw_success)
         
         flat_obs = self._flatten_obs(obs_dict)
-        
-        # Robosuite returns 'done' as a boolean. 
-        # In Gymnasium, we split this into 'terminated' (task success/fail) and 'truncated' (timeout).
-        # Since Robosuite usually handles timeout internally, we can treat done as terminated.
         terminated = done
-        truncated = False # You can add a step counter here if you want strict timeouts
+        truncated = False 
         
         return flat_obs, reward, terminated, truncated, info
 
@@ -145,9 +239,10 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         return self.env.reset(**kwargs)
 
     def step(self, action):
-        # 1. Step the environment
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.episode_steps += 1
+
+        # print(f'Length of action {len(action)} | Action received: {action}')  # Debug print to check action values
 
         # --- A. EXTRACT PHYSICS DATA ---
         # Access the raw Robosuite environment (unwrapped)
@@ -156,25 +251,8 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         base_env = self.env.env
         robot = base_env.robots[0]
         # print(self.env.env.unwrapped)  # Debug print to check the base environment
-        
-        # 1. Get Stiffness (Kp)
-        # Assumption: OSC_POSE controller with variable_kp.
-        # Action structure is usually [pos(3), ori(3), stiffness(6), gripper(1)]
-        # We take the mean of the 6 stiffness values (indices 6 to 12)
-        try:
-            kp_vals = action[0:6]
-            # Map [-1, 1] action to actual Kp scale if needed, but raw action is fine for trends
-            # current_stiffness = np.mean(np.abs(kp_vals)) 
-            stiffness_percentage = np.mean((kp_vals + 1.0) / 2.0)
-            min_kp, max_kp = 10.0, 200.0
-            physical_stiffness = min_kp + (stiffness_percentage * (max_kp - min_kp))
-        except IndexError:
-            stiffness_percentage = 0.0 
-            physical_stiffness = 0.0 
-
-        # 2. Get Contact Forces
-        # Robosuite robots have a property 'ee_force' (Fz) and 'ee_torque'
-        # Norm of the 3D force vector at the end-effector
+    
+        # Get Contact Forces
         try:
             ee_force = max([
                 np.linalg.norm(np.array(robot.recent_ee_forcetorques[arm].current[:3]))
@@ -183,14 +261,40 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         except Exception as e:
             ee_force = 0.0
 
-        # if self.episode_steps % 100 == 0:  # Debug print for the first 10 steps and then every 50 steps
-        #     print(f"Raw action received in PhysicsWrapper: {action}")  # Debug print to check action valuesw force values
-        #     print(f"[DEBUG WRAPPER] Step: {self.episode_steps} | "
-        #           f"Kp Action Mean: {stiffness_percentage:.2f} | "
-        #           f"EE Force: {ee_force:.2f} N | "
-        #           f"Joint Limits Check: {base_env.check_robot_join_limits():.2f} N | "
-        #           f"Base Reward: {reward:.3f}")
-            
+        # Get Stiffness (Kp) from the FRONT of the array
+        action_len = len(action)
+        min_kp, max_kp = 10.0, 200.0 # Align this with your config
+        
+        try:
+            if action_len in [15, 16]:
+                # --- GRL MODE (16D) ---
+                # Layout: Kp_trans_mandel(6), Kp_rot(3), pos(3), ori(3), gripper(1)
+                
+                # We extract the 3 diagonals from the Mandel parameters (indices 0, 1, 2)
+                kp_trans_diags = action[0:3] 
+                # We extract the 3 rotational stiffness diagonals (indices 6, 7, 8)
+                kp_rot = action[6:9] 
+                
+                kp_vals = np.concatenate([kp_trans_diags, kp_rot])
+                
+                stiffness_percentage = np.mean((kp_vals + 1.0) / 2.0)
+                physical_stiffness = min_kp + (stiffness_percentage * (max_kp - min_kp))
+
+            elif action_len == 13:
+                # Layout: Kp(6), pos(3), ori(3), gripper(1)
+                kp_vals = action[0:6]
+                
+                stiffness_percentage = np.mean((kp_vals + 1.0) / 2.0)
+                physical_stiffness = min_kp + (stiffness_percentage * (max_kp - min_kp))
+
+            else:
+                # --- FIXED MODE ---
+                stiffness_percentage = 0.0
+                physical_stiffness = 150.0 
+
+        except Exception as e:
+            stiffness_percentage = 0.0 
+            physical_stiffness = 0.0
 
         # 3. Check Safety (Joint Limits)
         is_unsafe = 0

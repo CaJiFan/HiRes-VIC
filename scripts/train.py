@@ -21,6 +21,48 @@ from robosuite import load_composite_controller_config
 import robosuite as suite
 from hires_vic.envs.gymnasium_wrapper import RobosuiteGymnasiumWrapper, RobosuitePhysicsWrapper
 
+import robosuite.controllers.parts.controller_factory as factory
+from copy import deepcopy
+from hires_vic.envs.custom_osc import GRL_OperationalSpaceController 
+
+# 1. Save a reference to Robosuite's original hardcoded factory
+original_arm_factory = factory.arm_controller_factory
+
+# 2. Define our custom factory function that intercepts the process
+def custom_arm_controller_factory(name, params):
+    if name == "GRL_OSC":
+        # We must replicate the interpolator logic that Robosuite normally 
+        # applies to OSC_POSE so your controller gets the right timing data
+        interpolator = None
+        if params.get("interpolation") == "linear":
+            from robosuite.utils.traj_utils import LinearInterpolator
+            interpolator = LinearInterpolator(
+                ndim=params["ndim"],
+                controller_freq=(1 / params["sim"].model.opt.timestep),
+                policy_freq=params["policy_freq"],
+                ramp_ratio=params["ramp_ratio"],
+            )
+
+        ori_interpolator = None
+        if interpolator is not None:
+            interpolator.set_states(dim=3)  # Pos control uses dim 3
+            ori_interpolator = deepcopy(interpolator)
+            ori_interpolator.set_states(ori="euler")
+            
+        params["control_ori"] = True
+        
+        # Return YOUR custom controller instead of raising a ValueError!
+        return GRL_OperationalSpaceController(
+            interpolator_pos=interpolator, 
+            interpolator_ori=ori_interpolator, 
+            **params
+        )
+
+    return original_arm_factory(name, params)
+
+# 3. OVERWRITE the function inside the Robosuite module at runtime!
+factory.arm_controller_factory = custom_arm_controller_factory
+
 
 def parse_args():
     import argparse
@@ -29,7 +71,7 @@ def parse_args():
     parser.add_argument("--run_name", type=str, default="baseline", help="Name for logging and saving models")
     parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm to use (default: PPO)")
     parser.add_argument("--n_envs", type=int, default=4, help="Number of parallel environments")
-    parser.add_argument("--total_timesteps", type=int, default=500_000, help="Total training timesteps")
+    parser.add_argument("--total_timesteps", type=int, default=1_000_000, help="Total training timesteps")
     parser.add_argument("--checkpoint", type=str, required=False, help="Path to the .zip checkpoint file")
     return parser.parse_args()
 
@@ -44,14 +86,23 @@ def make_env(run_name, env_name, rank, seed=0):
         if is_vic:
             controller_config = load_composite_controller_config(controller="BASIC", robot="panda")
             # print(f"Initial Controller: {controller_config}")
+            phantom_parts = ["left", "torso", "head", "base", "legs"]
+    
+            # 2. Safely remove them from the dictionary if they exist
+            for part in phantom_parts:
+                controller_config["body_parts"].pop(part, None)
 
+
+            print(controller_config)
             arm_config = controller_config["body_parts"]["right"]
-            arm_config["type"] = "OSC_POSE"
+            # arm_config["type"] = "OSC_POSE"
+            arm_config["type"] = "GRL_OSC"
 
             # "variable_kp": Agent outputs [Pos, Ori, Kp]. Damping (Kd) is auto-calculated.
             # "variable":  Agent outputs [Pos, Ori, Kp, Kd]. Both are learned.
             # "fixed": Agent outputs [Pos, Ori]. Kp is constant. (This was your Experiment 1)
-            arm_config["impedance_mode"] = "variable_kp"
+            # arm_config["impedance_mode"] = "variable_kp"
+            arm_config["impedance_mode"] = "fixed" 
             
             # 0 = Completely limp (gravity comp only), 300 = Very stiff
             arm_config["kp_limits"] = [10, 200] # TODO: Ask Adriá and Bernard about this!
@@ -65,9 +116,9 @@ def make_env(run_name, env_name, rank, seed=0):
             "has_renderer": False,
             "has_offscreen_renderer": False,
             "use_camera_obs": False,
-            "reward_shaping": True,       # <--- SET TO TRUE (Dense rewards)
-            "horizon": 500 if env_name == "Door" else 1000, # Shorter episodes for Door
-            "control_freq": 20,              # 20 Hz control frequency (50ms per step)
+            "reward_shaping": True,
+            "horizon": 300 if env_name == "Door" else 1000, # Shorter episodes for Door
+            "control_freq": 20,              #  50ms per step
         }
         
         env = RobosuiteGymnasiumWrapper(
@@ -86,10 +137,10 @@ def make_env(run_name, env_name, rank, seed=0):
             max_force_threshold=35.0
         )
 
-        print(f"Initialized environment: {env_name} | VIC Mode: {is_vic}")
-        print(f"Applying stiffness penalty: {stiff_penalty}")
-        print(f"Max force threshold: 35.0N")
-        print(f"Force penalty: 0.02 per Newton above threshold")
+        # print(f"Initialized environment: {env_name} | VIC Mode: {is_vic}")
+        # print(f"Applying stiffness penalty: {stiff_penalty}")
+        # print(f"Max force threshold: 35.0N")
+        # print(f"Force penalty: 0.02 per Newton above threshold")
        
         env.reset(seed=seed + rank) # Distinct seed for each worker
         return env
@@ -132,60 +183,34 @@ def main():
     }
 
     if args.algorithm == "PPO":
-        # n_envs = 12
-        # env = SubprocVecEnv([make_env(run_name, args.env, i) for i in range(n_envs)])
-        # env = VecMonitor(env)
-        # model = PPO(
-        #     "MlpPolicy", 
-        #     env, 
-        #     verbose=1, 
-        #     tensorboard_log=f"./outputs/logs/{run_name}",
-        #     learning_rate=3e-4,
-        #     batch_size=2048, # Scale batch size with number of envs
-        #     # n_steps=1536 // args.n_envs,
-        #     n_steps=512,
-        #     ent_coef=0.01,           # Encourage exploration
-        #     use_sde=True,            # Smooth robotic noise
-        #     sde_sample_freq=8,       # Change noise every 8 steps
-        #     clip_range=0.1,          # Stability for variable Kp
-        #     device="cpu",
-        #     n_epochs=10              # More epochs for better convergence with smaller batch size
-
-        # )
-        print(">>> Using RecurrentPPO (LSTM) for PPO...")
+        print(">>> Using PPO...")
         if args.checkpoint:
             print(f"Loading model from checkpoint: {args.checkpoint}")
-            model = RecurrentPPO.load(args.checkpoint, env=env, custom_objects=custom_objects, device=device)
+            # model = RecurrentPPO.load(args.checkpoint, env=env, custom_objects=custom_objects, device=device)
+            model = PPO.load(args.checkpoint, env=env, custom_objects=custom_objects, device=device)
         else:
-            
-            model = RecurrentPPO(
-                "MlpLstmPolicy", 
-                env,
-                verbose=1,
+            model = PPO(
+                "MlpPolicy", 
+                env, 
+                verbose=1, 
                 tensorboard_log=f"./outputs/logs/{run_name}",
                 learning_rate=3e-4,
-                n_steps=2048,           # Large buffer for LSTM to learn long sequences
-                batch_size=512,         # Smaller batch (better for LSTM gradients)
-                n_epochs=10,            # [KEEP] Squeeze data efficiency
-                ent_coef=0.01,          # [KEEP] Force exploration
-                clip_range=0.1,         # [KEEP] Prevent catastrophic forgetting
-                use_sde=True,           # [KEEP] Smooth robotic motion
-                sde_sample_freq=8,      # [KEEP] Consistency over 8 steps (~0.4s)
-                policy_kwargs={
-                    "enable_critic_lstm": True, 
-                    "lstm_hidden_size": 256,
-                    "net_arch": dict(pi=[256, 256], vf=[256, 256]),
-                    "optimizer_kwargs": {"weight_decay": 1e-5} # Optional: helps LSTMs generalize
-                },
-                device=device
+                batch_size=64,
+                # n_steps=1536 // args.n_envs,
+                n_steps=512,
+                ent_coef=0.01,           # Encourage exploration
+                use_sde=True,            # Smooth robotic noise
+                sde_sample_freq=8,       # Change noise every 8 steps
+                clip_range=0.1,          # Stability for variable Kp
+                device=device,
+                gamma=0.99,
+                n_epochs=20              # More epochs for better convergence with smaller batch size
+
             )
 
         # print(f'Clip range: {model.clip_range}')
         
     elif args.algorithm == "SAC":
-        # n_envs = 4
-        # env = SubprocVecEnv([make_env(run_name, args.env, i) for i in range(n_envs)])
-        # env = VecMonitor(env)
         if args.checkpoint:
             print(f"Loading model from checkpoint: {args.checkpoint}")
             model = SAC.load(args.checkpoint, env=env, custom_objects=custom_objects, device=device)
@@ -196,14 +221,14 @@ def main():
                 verbose=1,
                 tensorboard_log=f"./outputs/logs/{run_name}",
                 learning_rate=3e-4,
-                batch_size=512,
+                batch_size=256,
                 buffer_size=1_000_000,
                 tau=0.002,              # For soft updates of the target network
-                target_entropy=-16.0 , # Encourage exploration (tune based on action space)
+                target_entropy="auto", # Encourage exploration (tune based on action space)
                 train_freq=1,        # Train every step
-                gradient_steps=4,    # Take 4 gradient steps to match 4 new data points
-                use_sde=True,            # Smooth robotic noise
-                sde_sample_freq=8,
+                gradient_steps=2,    # Take 4 gradient steps to match 4 new data points
+                use_sde=False,            # Smooth robotic noise
+                # sde_sample_freq=8,
                 device=device
             )
 
@@ -231,7 +256,7 @@ def main():
                 tensorboard_log=f"./outputs/logs/{run_name}",
                 learning_rate=3e-4,
                 buffer_size=1_000_000,
-                batch_size=512,
+                batch_size=256,
                 tau=0.002,
                 train_freq=1,
                 gradient_steps=1,
@@ -265,8 +290,8 @@ def main():
                 train_freq=1,
                 gradient_steps=1,
                 ent_coef="auto",
-                use_sde=True,              # TQC supports SDE!
-                sde_sample_freq=8,
+                use_sde=False,
+                # sde_sample_freq=8,
                 policy_kwargs=policy_kwargs,
                 device=device
             )

@@ -297,3 +297,636 @@ Finished PPO on Door
 Starting SAC on Door for 1_000_000 steps...
 Date: lun 23 feb 2026 01:45:38 CET
 ==================================================
+Finished TQC on Wipe
+run_Wipe.sh: line 40: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 41: syntax error: unexpected end of file
+==================================================
+Starting PPO on NutAssemblyRound for 3_000_000 steps...
+Date: lun 23 feb 2026 02:52:16 CET
+==================================================
+==================================================
+Starting PPO on NutAssemblySquare for 3_000_000 steps...
+Date: lun 23 feb 2026 02:52:22 CET
+==================================================
+Finished SAC on Door
+==================================================
+Starting TD3 on Door for 1_000_000 steps...
+Date: lun 23 feb 2026 06:04:09 CET
+==================================================
+Finished TD3 on Door
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: lun 23 feb 2026 07:26:12 CET
+==================================================
+Finished TQC on Door
+All Door experiments completed!
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: lun 23 feb 2026 10:35:40 CET
+==================================================
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 23 feb 2026 10:58:42 CET
+==================================================
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 3_000_000 steps...
+Date: lun 23 feb 2026 11:01:58 CET
+==================================================
+==================================================
+Starting PPO on Door for 1_000_000 steps...
+Date: lun 23 feb 2026 12:55:10 CET
+==================================================
+Finished PPO on Door
+All Door experiments completed!
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: lun 23 feb 2026 14:50:56 CET
+==================================================
+Finished SAC on Door
+==================================================
+Starting TD3 on Door for 1_000_000 steps...
+Date: lun 23 feb 2026 17:24:32 CET
+==================================================
+Finished TD3 on Door
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: lun 23 feb 2026 18:47:43 CET
+==================================================
+Finished TQC on Door
+All Door experiments completed!
+Finished SAC on Wipe
+==================================================
+Starting TD3 on Wipe for 3_000_000 steps...
+Date: mar 24 feb 2026 00:07:06 CET
+==================================================
+Finished SAC on NutAssemblySquare
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: mar 24 feb 2026 00:11:24 CET
+==================================================
+Finished SAC on NutAssemblyRound
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: mar 24 feb 2026 00:23:48 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: mar 24 feb 2026 04:24:02 CET
+==================================================
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: mar 24 feb 2026 04:37:20 CET
+==================================================
+Finished TD3 on Wipe
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: mar 24 feb 2026 04:57:46 CET
+==================================================
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting PPO on Wipe for 3_000_000 steps...
+Date: mar 24 feb 2026 14:24:10 CET
+==================================================
+==================================================
+Starting PPO on NutAssemblySquare for 3_000_000 steps...
+Date: mar 24 feb 2026 14:24:18 CET
+==================================================
+==================================================
+Starting PPO on NutAssemblySquare for 3_000_000 steps...
+Date: mar 24 feb 2026 14:24:23 CET
+==================================================
+==================================================
+Starting PPO on NutAssemblyRound for 3_000_000 steps...
+Date: mar 24 feb 2026 14:24:31 CET
+==================================================
+Finished PPO on NutAssemblySquare
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: mar 24 feb 2026 18:49:20 CET
+==================================================
+Finished PPO on NutAssemblyRound
+==================================================
+Starting SAC on NutAssemblyRound for 3_000_000 steps...
+Date: mar 24 feb 2026 18:50:05 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: mar 24 feb 2026 19:34:43 CET
+==================================================
+Finished SAC on NutAssemblyRound
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: mié 25 feb 2026 01:58:36 CET
+==================================================
+Finished SAC on NutAssemblySquare
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: mié 25 feb 2026 01:58:44 CET
+==================================================
+Finished SAC on Wipe
+==================================================
+Starting TD3 on Wipe for 3_000_000 steps...
+Date: mié 25 feb 2026 02:58:01 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: mié 25 feb 2026 06:10:45 CET
+==================================================
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: mié 25 feb 2026 06:11:16 CET
+==================================================
+Finished TD3 on Wipe
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: mié 25 feb 2026 07:25:06 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: mié 25 feb 2026 11:15:26 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: mié 25 feb 2026 11:15:36 CET
+==================================================
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: mié 25 feb 2026 11:15:45 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: mié 25 feb 2026 23:04:36 CET
+==================================================
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: mié 25 feb 2026 23:04:45 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: mié 25 feb 2026 23:04:50 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: mié 25 feb 2026 23:04:54 CET
+==================================================
+run_Wipe.sh: line 4: 25385 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on Wipe
+All Wipe experiments completed!
+run_Door.sh: line 4: 25686 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on Door
+All Door experiments completed!
+run_NutAssemblyRound.sh: line 4: 25908 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+run_NutAssemblySquare.sh: line 4: 26091 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+==================================================
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Starting TQC on Wipe for 3_000_000 steps...
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: mié 25 feb 2026 23:30:49 CET
+==================================================
+Date: mié 25 feb 2026 23:30:49 CET
+==================================================
+Date: mié 25 feb 2026 23:30:49 CET
+==================================================
+Date: mié 25 feb 2026 23:30:49 CET
+==================================================
+run_Wipe.sh: line 4: 28279 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on Wipe
+All Wipe experiments completed!
+run_NutAssemblySquare.sh: line 4: 28280 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+run_NutAssemblyRound.sh: line 4: 28282 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+run_Door.sh: line 4: 28281 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on Door
+All Door experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: mié 25 feb 2026 23:32:49 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: mié 25 feb 2026 23:32:56 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: mié 25 feb 2026 23:33:10 CET
+==================================================
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: mié 25 feb 2026 23:33:16 CET
+==================================================
+Finished TQC on Door
+All Door experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: jue 26 feb 2026 11:27:47 CET
+==================================================
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: jue 26 feb 2026 11:27:50 CET
+==================================================
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: jue 26 feb 2026 11:28:03 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: jue 26 feb 2026 11:28:11 CET
+==================================================
+Finished TQC on Door
+All Door experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: jue 26 feb 2026 11:29:36 CET
+==================================================
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: jue 26 feb 2026 11:30:37 CET
+==================================================
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: jue 26 feb 2026 11:31:22 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: jue 26 feb 2026 11:31:31 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: jue 26 feb 2026 11:31:35 CET
+==================================================
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: jue 26 feb 2026 11:31:40 CET
+==================================================
+Finished TQC on Door
+All Door experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: jue 26 feb 2026 20:29:52 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: jue 26 feb 2026 20:29:58 CET
+==================================================
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: jue 26 feb 2026 20:30:02 CET
+==================================================
+==================================================
+Starting TQC on Door for 1_000_000 steps...
+Date: jue 26 feb 2026 20:30:06 CET
+==================================================
+Finished TQC on Door
+All Door experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: sáb 28 feb 2026 20:08:13 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:23:55 CET
+==================================================
+==================================================
+Starting PPO on NutAssemblySquare for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:24:11 CET
+==================================================
+run_NutAssemblyRound.sh: line 4: 100219 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on NutAssemblyRound
+run_NutAssemblyRound.sh: line 35: unexpected EOF while looking for matching `"'
+run_NutAssemblyRound.sh: line 36: syntax error: unexpected end of file
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:26:02 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:26:07 CET
+==================================================
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:26:14 CET
+==================================================
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: sáb 28 feb 2026 23:26:17 CET
+==================================================
+Finished SAC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:31:47 CET
+==================================================
+Finished SAC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:34:49 CET
+==================================================
+Finished SAC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: sáb 28 feb 2026 23:51:08 CET
+==================================================
+Finished SAC on Door
+All Door experiments completed!
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 03:36:40 CET
+==================================================
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 03:37:50 CET
+==================================================
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+run_Wipe.sh: line 4: 109212 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished SAC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting PPO on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 13:11:36 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 13:19:23 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 13:19:29 CET
+==================================================
+==================================================
+Starting PPO on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 13:19:36 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+StFinished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 13:37:34 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 13:37:34 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 13:37:34 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished SAC on Door
+All Door experiments completed!
+Finished SAC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting PPO on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 14:27:08 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 14:27:21 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 14:27:25 CET
+==================================================
+==================================================
+Starting PPO on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 14:27:28 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 16:15:05 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 16:15:05 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 16:15:05 CET
+==================================================
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 16:15:05 CET
+==================================================
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished SAC on Door
+All Door experiments completed!
+Finished SAC on Wipe
+All Wipe experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+==================================================
+Starting PPO on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 19:02:40 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 19:02:49 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 19:02:55 CET
+==================================================
+Finished SAC on Wipe
+All Wipe experiments completed!
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 19:02:59 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 19:03:03 CET
+==================================================
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 19:03:08 CET
+==================================================
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+==================================================
+Starting PPO on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 19:03:14 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 19:03:23 CET
+==================================================
+Finished SAC on Door
+All Door experiments completed!
+==================================================
+Starting PPO on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 19:05:35 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 19:05:39 CET
+==================================================
+Finished PPO on Wipe
+==================================================
+Starting SAC on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 19:05:43 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 19:05:44 CET
+==================================================
+==================================================
+Starting PPO on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 19:05:48 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 19:05:48 CET
+==================================================
+Finished SAC on Wipe
+All Wipe experiments completed!
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 19:05:53 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 19:05:58 CET
+==================================================
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished SAC on Door
+All Door experiments completed!
+==================================================
+Starting PPO on Wipe for 3_000_000 steps...
+Date: dom 01 mar 2026 19:17:42 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 19:18:01 CET
+==================================================
+==================================================
+Starting TD3 on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 19:18:26 CET
+==================================================
+==================================================
+Starting PPO on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 19:18:43 CET
+==================================================
+Finished PPO on Door
+==================================================
+Starting SAC on Door for 1_000_000 steps...
+Date: dom 01 mar 2026 20:47:17 CET
+==================================================
+Finished SAC on Door
+All Door experiments completed!
+Finished TD3 on NutAssemblyRound
+==================================================
+Starting TQC on NutAssemblyRound for 3_000_000 steps...
+Date: dom 01 mar 2026 23:40:15 CET
+==================================================
+Finished TD3 on NutAssemblySquare
+==================================================
+Starting TQC on NutAssemblySquare for 3_000_000 steps...
+Date: dom 01 mar 2026 23:40:33 CET
+==================================================
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: lun 02 mar 2026 03:38:49 CET
+==================================================
+Finished TQC on NutAssemblyRound
+All NutAssemblyRound experiments completed!
+Finished TQC on NutAssemblySquare
+All NutAssemblySquare experiments completed!
+Finished PPO on Wipe
+run_Wipe.sh: line 34: 0: command not found
+==================================================
+Starting TQC on Wipe for 3_000_000 steps...
+Date: lun 02 mar 2026 08:30:18 CET
+==================================================
+run_Wipe.sh: line 4: 155905 Killed                  python3 scripts/train.py --env $ENV_NAME --algorithm $ALGO --total_timesteps $STEPS --run_name $EXP_NAME > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+Finished TQC on Wipe
+All Wipe experiments completed!
