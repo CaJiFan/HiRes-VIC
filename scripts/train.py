@@ -7,62 +7,23 @@ from wandb.integration.sb3 import WandbCallback
 
 import torch
 import numpy as np
-from stable_baselines3 import PPO, SAC, TD3
-try:
-    from sb3_contrib import TQC, RecurrentPPO
-except ImportError:
-    print("TQC not found. Please install sb3-contrib: `pip install sb3-contrib`")
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
-from stable_baselines3.common.callbacks import CheckpointCallback
-from hires_vic.utils.callbacks import RobosuiteLoggingCallback
-from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
+from copy import deepcopy
 
 from robosuite import load_composite_controller_config
-import robosuite as suite
+import robosuite.controllers.parts.controller_factory as factory
+
+from stable_baselines3 import PPO, SAC, TD3
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
+from sb3_contrib import TQC, RecurrentPPO
+
+from hires_vic.envs.riemannian_controller import RiemannianController
+from hires_vic.utils.callbacks import RobosuiteLoggingCallback
 from hires_vic.envs.gymnasium_wrapper import RobosuiteGymnasiumWrapper, RobosuitePhysicsWrapper
 
-import robosuite.controllers.parts.controller_factory as factory
-from copy import deepcopy
-from hires_vic.envs.custom_osc import GRL_OperationalSpaceController 
-
-# 1. Save a reference to Robosuite's original hardcoded factory
-original_arm_factory = factory.arm_controller_factory
-
-# 2. Define our custom factory function that intercepts the process
-def custom_arm_controller_factory(name, params):
-    if name == "GRL_OSC":
-        # We must replicate the interpolator logic that Robosuite normally 
-        # applies to OSC_POSE so your controller gets the right timing data
-        interpolator = None
-        if params.get("interpolation") == "linear":
-            from robosuite.utils.traj_utils import LinearInterpolator
-            interpolator = LinearInterpolator(
-                ndim=params["ndim"],
-                controller_freq=(1 / params["sim"].model.opt.timestep),
-                policy_freq=params["policy_freq"],
-                ramp_ratio=params["ramp_ratio"],
-            )
-
-        ori_interpolator = None
-        if interpolator is not None:
-            interpolator.set_states(dim=3)  # Pos control uses dim 3
-            ori_interpolator = deepcopy(interpolator)
-            ori_interpolator.set_states(ori="euler")
-            
-        params["control_ori"] = True
-        
-        # Return YOUR custom controller instead of raising a ValueError!
-        return GRL_OperationalSpaceController(
-            interpolator_pos=interpolator, 
-            interpolator_ori=ori_interpolator, 
-            **params
-        )
-
-    return original_arm_factory(name, params)
-
-# 3. OVERWRITE the function inside the Robosuite module at runtime!
-factory.arm_controller_factory = custom_arm_controller_factory
-
+factory.arm_controllers.OperationalSpaceController = RiemannianController
 
 def parse_args():
     import argparse
@@ -72,45 +33,39 @@ def parse_args():
     parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm to use (default: PPO)")
     parser.add_argument("--n_envs", type=int, default=4, help="Number of parallel environments")
     parser.add_argument("--total_timesteps", type=int, default=1_000_000, help="Total training timesteps")
+    parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
+    parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
+    parser.add_argument("--seed", type=int, default=1, help="Random seed (e.g., 1, 2, 3)")
     parser.add_argument("--checkpoint", type=str, required=False, help="Path to the .zip checkpoint file")
     return parser.parse_args()
 
-def make_env(run_name, env_name, rank, seed=0):
+def make_env(args, run_name, env_name, rank, seed=0):
     """
     Utility function for multiprocessed env.
     """
     def _init():
         controller_config = None
         is_vic = "VIC" in run_name
+        kp_limits = [20, 200] # [50, 300]
 
         if is_vic:
             controller_config = load_composite_controller_config(controller="BASIC", robot="panda")
-            # print(f"Initial Controller: {controller_config}")
+
             phantom_parts = ["left", "torso", "head", "base", "legs"]
-    
-            # 2. Safely remove them from the dictionary if they exist
             for part in phantom_parts:
                 controller_config["body_parts"].pop(part, None)
-
-
-            print(controller_config)
+            
             arm_config = controller_config["body_parts"]["right"]
-            # arm_config["type"] = "OSC_POSE"
-            arm_config["type"] = "GRL_OSC"
+            arm_config["type"] = "OSC_POSE"
 
             # "variable_kp": Agent outputs [Pos, Ori, Kp]. Damping (Kd) is auto-calculated.
             # "variable":  Agent outputs [Pos, Ori, Kp, Kd]. Both are learned.
-            # "fixed": Agent outputs [Pos, Ori]. Kp is constant. (This was your Experiment 1)
-            # arm_config["impedance_mode"] = "variable_kp"
-            arm_config["impedance_mode"] = "fixed" 
+            # "fixed": Agent outputs [Pos, Ori]. Kp is constant.
+            arm_config["impedance_mode"] = "riemannian_kp" if args.use_spd else "variable_kp"
             
             # 0 = Completely limp (gravity comp only), 300 = Very stiff
-            arm_config["kp_limits"] = [10, 200] # TODO: Ask Adriá and Bernard about this!
-            
-            # 0 = Bouncy, 1 = Critical Damping (No overshoot), >1 = Sluggish
-            # We let the agent learn this or auto-scale it.
+            arm_config["kp_limits"] = kp_limits 
             arm_config["damping_ratio_limits"] = [1.0, 1.0] # Force critical damping
-            # print(f"Using VIC controller config: {controller_config}")
         
         task_kwargs = {
             "has_renderer": False,
@@ -119,13 +74,16 @@ def make_env(run_name, env_name, rank, seed=0):
             "reward_shaping": True,
             "horizon": 300 if env_name == "Door" else 1000, # Shorter episodes for Door
             "control_freq": 20,              #  50ms per step
+            "kp_limits": kp_limits if is_vic else None,  # Only pass kp_limits if using VIC
         }
         
         env = RobosuiteGymnasiumWrapper(
             env_name=env_name,
             robots="Panda",
             controller_configs=controller_config,
-            task_kwargs=task_kwargs
+            task_kwargs=task_kwargs,
+            use_spd_manifold=args.use_spd, 
+            use_lie_group=args.use_lie
         )
         
         stiff_penalty = 0.01 if is_vic else 0.0
@@ -149,12 +107,14 @@ def make_env(run_name, env_name, rank, seed=0):
 
 def main():
     args = parse_args()
+    set_random_seed(args.seed)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Training on {device.upper()} with {args.n_envs} parallel environments.")
+    print(f"🚀 Starting training for {args.env} with SEED: {args.seed}")
 
     env_name = args.env
-    run_name = f'{args.algorithm}_{env_name.lower()}_{args.run_name}'
+    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SPD_{str(args.use_spd).upper()}_LG_{str(args.use_lie).upper()}_SEED_{args.seed}'
 
     wandb.init(
         project="HiRes-VIC",          # Name of your project dashboard
@@ -172,7 +132,7 @@ def main():
     )
 
     # Create Vectorized Environment
-    env_fns = [make_env(run_name, args.env, i) for i in range(args.n_envs)]
+    env_fns = [make_env(args, run_name, args.env, i) for i in range(args.n_envs)]
     env = SubprocVecEnv(env_fns)
     env = VecMonitor(env)
 
@@ -204,6 +164,7 @@ def main():
                 clip_range=0.1,          # Stability for variable Kp
                 device=device,
                 gamma=0.99,
+                seed=args.seed,
                 n_epochs=20              # More epochs for better convergence with smaller batch size
 
             )
@@ -221,7 +182,7 @@ def main():
                 verbose=1,
                 tensorboard_log=f"./outputs/logs/{run_name}",
                 learning_rate=3e-4,
-                batch_size=256,
+                batch_size=512,
                 buffer_size=1_000_000,
                 tau=0.002,              # For soft updates of the target network
                 target_entropy="auto", # Encourage exploration (tune based on action space)
@@ -229,6 +190,7 @@ def main():
                 gradient_steps=2,    # Take 4 gradient steps to match 4 new data points
                 use_sde=False,            # Smooth robotic noise
                 # sde_sample_freq=8,
+                seed=args.seed,
                 device=device
             )
 
@@ -261,6 +223,7 @@ def main():
                 train_freq=1,
                 gradient_steps=1,
                 policy_delay=2,         # Update policy every 2 critic updates
+                seed=args.seed,
                 device=device
             )
 
@@ -293,6 +256,7 @@ def main():
                 use_sde=False,
                 # sde_sample_freq=8,
                 policy_kwargs=policy_kwargs,
+                seed=args.seed,
                 device=device
             )
 
@@ -300,10 +264,10 @@ def main():
    
 
     remaining_steps = args.total_timesteps - model.num_timesteps
-    if remaining_steps <= 0:
-        print(f"Model already trained for {model.num_timesteps} steps. Target is {args.total_timesteps}.")
-        # print("Increasing target by +1M steps...")
-        # remaining_steps = 1_000_000
+    # if remaining_steps <= 0:
+    #     print(f"Model already trained for {model.num_timesteps} steps. Target is {args.total_timesteps}.")
+    #     # print("Increasing target by +1M steps...")
+    #     # remaining_steps = 1_000_000
     
     print(f'Running for {remaining_steps} timesteps...')
 

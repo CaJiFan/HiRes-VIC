@@ -45,14 +45,14 @@ def spd_grl_map(params: torch.Tensor) -> torch.Tensor:
     # Note: The NN outputs the Mandel coordinates, we scale them back to matrix entries
     inv_sqrt2 = 1.0 / math.sqrt(2.0) 
     
-    S[:, 0, 1] = params[:, 3] * inv_sqrt2
-    S[:, 1, 0] = params[:, 3] * inv_sqrt2
+    S[:, 0, 1] = params[:, 5] * inv_sqrt2
+    S[:, 1, 0] = params[:, 5] * inv_sqrt2
     
     S[:, 0, 2] = params[:, 4] * inv_sqrt2
     S[:, 2, 0] = params[:, 4] * inv_sqrt2
     
-    S[:, 1, 2] = params[:, 5] * inv_sqrt2
-    S[:, 2, 1] = params[:, 5] * inv_sqrt2
+    S[:, 1, 2] = params[:, 3] * inv_sqrt2
+    S[:, 2, 1] = params[:, 3] * inv_sqrt2
     
     # Riemannian Exponential Map (Matrix Exponential)
     K = torch.linalg.matrix_exp(S)

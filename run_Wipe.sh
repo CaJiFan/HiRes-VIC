@@ -1,26 +1,42 @@
 #!/bin/bash
 
 # Define a function to run training so we don't repeat code
+TASK="Wipe"
 run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="GRL_OSC_VIC"
+    USE_SPD=$4
+    USE_LG=$5
+    EXP_NAME=$6
+    SEED=$7
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
     echo "Date: $(date)"
     echo "=================================================="
 
-    # Run Python script
-    # > logs/... saves the text output to a file
-    # 2>&1 captures errors too
-    python3 scripts/train.py \
-        --env $ENV_NAME \
-        --algorithm $ALGO \
-        --total_timesteps $STEPS \
-        --run_name $EXP_NAME \
-        > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
+    # 1. Start with the base arguments
+    ARGS=(
+        scripts/train.py
+        --env "$ENV_NAME"
+        --algorithm "$ALGO"
+        --total_timesteps "$STEPS"
+        --run_name "$EXP_NAME"
+        --seed "$SEED"
+    )
+
+    # 2. Add conditional flags
+    if [ "$USE_SPD" = "TRUE" ]; then
+        ARGS+=(--use_spd)
+    fi
+
+    if [ "$USE_LG" = "TRUE" ]; then
+        ARGS+=(--use_lie)
+    fi
+
+    # 3. Execute the command
+    python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
     
     echo "Finished $ALGO on $ENV_NAME"
 }
@@ -28,11 +44,13 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
+# --- 1. Door (Baseline) ---
+for SEED in 1 2 3
+do
+    # run_train $TASK "PPO" 1_000_000
+    # run_train $TASK "SAC" 1_000_000
+    # run_train $TASK "TD3" 1_000_000
+    run_train $TASK "TQC" 5_000_000 "TRUE" "TRUE" "VIC" $SEED
+done
 
-# --- 3. Wipe (Impedance / Force) ---
-# run_train "Wipe" "PPO" 3_000_000
-# run_train "Wipe" "SAC" 3_000_000
-# run_train "Wipe" "TD3" 3_000_000
-run_train "Wipe" "TQC" 3_000_000
-
-echo "All Wipe experiments completed!"
+echo "All Door experiments completed!"

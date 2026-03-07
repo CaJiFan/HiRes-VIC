@@ -1,11 +1,14 @@
 #!/bin/bash
 
-# Define a function to run training so we don't repeat code
+TASK="NutAssemblyRound"
 run_train() {
     ENV_NAME=$1
     ALGO=$2
     STEPS=$3
-    EXP_NAME="GRL_OSC_VIC"
+    SEED=$4
+    USE_GRL="TRUE"
+    USE_LG="TRUE"
+    EXP_NAME="VIC_GRL_${USE_GRL}_LG_${USE_LG}_SEED_${SEED}"
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -20,6 +23,7 @@ run_train() {
         --algorithm $ALGO \
         --total_timesteps $STEPS \
         --run_name $EXP_NAME \
+        --seed $SEED \
         > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
     
     echo "Finished $ALGO on $ENV_NAME"
@@ -28,9 +32,14 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-# run_train "NutAssemblyRound" "PPO" 3_000_000
-# run_train "NutAssemblyRound" "SAC" 3_000_000
-run_train "NutAssemblyRound" "TD3" 3_000_000
-run_train "NutAssemblyRound" "TQC" 3_000_000
+# --- 1. Door (Baseline) ---
+for SEED in 1 2 3
+do
+    # run_train $TASK "PPO" 1_000_000
+    # run_train $TASK "SAC" 1_000_000
+    # run_train $TASK "TD3" 1_000_000
+    run_train $TASK "TQC" 5_000_000 $SEED
 
-echo "All NutAssemblyRound experiments completed!"
+done
+
+echo "All Door experiments completed!"

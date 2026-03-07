@@ -1,17 +1,17 @@
+import math
+
 import numpy as np
-import scipy.linalg
-from robosuite.utils.control_utils import orientation_error, opspace_matrices, nullspace_torques
-from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from scipy.spatial.transform import Rotation
 
+import robosuite.utils.transform_utils as T
+from robosuite.controllers.parts.controller import OperationalSpaceController
+from robosuite.utils.control_utils import *
 
 class GRL_OperationalSpaceController(OperationalSpaceController):
     def __init__(self, **kwargs):
         # Initialize the base class
         super().__init__(**kwargs)
         
-        # Override the control dimension so Robosuite's CompositeController 
-        # routes exactly 18 elements to the arm, rather than 6.
         self.control_dim = 18
 
     @property
@@ -21,8 +21,8 @@ class GRL_OperationalSpaceController(OperationalSpaceController):
         array to satisfy Robosuite's action_spec builder, otherwise it will crash.
         """
         # 1. Dummy limits for the 9 matrix elements (SB3 restricts them to [-1, 1] before the Exp map anyway)
-        kp_pos_low = np.full(9, -1000.0)
-        kp_pos_high = np.full(9, 1000.0)
+        kp_pos_low = np.full(9, -5.0)
+        kp_pos_high = np.full(9, 6.0)
         
         # 2. Extract the rotational stiffness limits (indices 3, 4, 5 of kp_min/max)
         kp_ori_low = self.kp_min[3:6]
@@ -63,11 +63,11 @@ class GRL_OperationalSpaceController(OperationalSpaceController):
         
         # 2. Reconstruct the 3x3 matrix
         self.kp_pos_matrix = kp_pos_flat.reshape((3, 3))
-        self.kp_ori_array = np.clip(kp_ori, self.kp_min[3:6], self.kp_max[3:6])
+        self.kd_pos_matrix = 2.0 * scipy.linalg.sqrtm(self.kp_pos_matrix).real
         
         # 3. Calculate Damping Matrix (Kd = 2 * sqrtm(Kp))
         # scipy.linalg.sqrtm computes the matrix square root
-        self.kd_pos_matrix = 2.0 * scipy.linalg.sqrtm(self.kp_pos_matrix).real
+        self.kp_ori_array = np.clip(kp_ori, self.kp_min[3:6], self.kp_max[3:6])
         self.kd_ori_array = 2.0 * np.sqrt(self.kp_ori_array)
 
         # If we're using deltas, interpret actions as such
