@@ -13,8 +13,8 @@ from robosuite import load_composite_controller_config
 import robosuite.controllers.parts.controller_factory as factory
 
 from stable_baselines3 import PPO, SAC, TD3
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, DummyVecEnv
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 from sb3_contrib import TQC, RecurrentPPO
@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument("--env", type=str, default="Door", help="Name of the Robosuite environment")
     parser.add_argument("--run_name", type=str, default="baseline", help="Name for logging and saving models")
     parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm to use (default: PPO)")
-    parser.add_argument("--n_envs", type=int, default=4, help="Number of parallel environments")
+    parser.add_argument("--n_envs", type=int, default=8, help="Number of parallel environments")
     parser.add_argument("--total_timesteps", type=int, default=1_000_000, help="Total training timesteps")
     parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
@@ -76,6 +76,10 @@ def make_env(args, run_name, env_name, rank, seed=0):
             "control_freq": 20,              #  50ms per step
             "kp_limits": kp_limits if is_vic else None,  # Only pass kp_limits if using VIC
         }
+
+        if "TILTED" in env_name.upper():
+            print(">>> Using tilted variant with 45 degree tilt...")
+            task_kwargs["tilt_angle_degrees"] = 45.0
         
         env = RobosuiteGymnasiumWrapper(
             env_name=env_name,
@@ -103,7 +107,6 @@ def make_env(args, run_name, env_name, rank, seed=0):
         env.reset(seed=seed + rank) # Distinct seed for each worker
         return env
     return _init
-
 
 def main():
     args = parse_args()
@@ -270,7 +273,19 @@ def main():
     #     # remaining_steps = 1_000_000
     
     print(f'Running for {remaining_steps} timesteps...')
-
+    eval_env_fn = make_env(args, run_name, args.env, rank=0, seed=999)
+    eval_env = DummyVecEnv([eval_env_fn])
+    eval_env = VecMonitor(eval_env)
+    
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=f"./logs/best_models/{run_name}/",
+        log_path=f"./logs/eval/{run_name}/",
+        eval_freq=max(100_000 // args.n_envs, 1),
+        n_eval_episodes=10, # Run 10 deterministic episodes
+        deterministic=True,
+        render=False
+    )
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000, 
         save_path=f"./outputs/checkpoints/{run_name}",
@@ -291,7 +306,7 @@ def main():
     print(f"Starting training for {run_name}...")
     model.learn(
         total_timesteps=remaining_steps, 
-        callback=[checkpoint_callback, logging_callback, wandb_callback], 
+        callback=[checkpoint_callback, logging_callback, wandb_callback, eval_callback], 
         reset_num_timesteps=False
     )
     

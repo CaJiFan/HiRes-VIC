@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define a function to run training so we don't repeat code
-TASK="TiltedWipe"
+TASK="DeltaWipe"
 run_train() {
     ENV_NAME=$1
     ALGO=$2
@@ -44,21 +44,13 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-# --- 1. Door (Baseline) ---
-# for SEED in 1 2 3
-# do
-#     # run_train $TASK "PPO" 1_000_000
-#     # run_train $TASK "SAC" 1_000_000
-#     # run_train $TASK "TD3" 1_000_000
-#     run_train $TASK "TQC" 5_000_000 "FALSE" "FALSE" "VIC_TILTED" $SEED
-# done
-
 SEED=3
-TASK="TiltedWipe"
-run_train $TASK "SAC" 5_000_000 "TRUE" "TRUE" "VIC_TILTED" $SEED
-run_train $TASK "SAC" 5_000_000 "TRUE" "FALSE" "VIC_TILTED" $SEED
-run_train $TASK "SAC" 5_000_000 "FALSE" "TRUE" "VIC_TILTED" $SEED
-run_train $TASK "SAC" 5_000_000 "FALSE" "FALSE" "VIC_TILTED" $SEED
+TASK="DeltaWipe"
+run_train $TASK "SAC" 5_000_000 "TRUE" "TRUE" "VIC_DELTA" $SEED
+run_train $TASK "SAC" 5_000_000 "TRUE" "FALSE" "VIC_DELTA" $SEED
+run_train $TASK "SAC" 5_000_000 "FALSE" "TRUE" "VIC_DELTA" $SEED
+run_train $TASK "SAC" 5_000_000 "FALSE" "FALSE" "VIC_DELTA" $SEED
+
 
 
 echo "All Door experiments completed!"

@@ -158,8 +158,14 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         # print(f"Scaled Robosuite Action ({len(robosuite_action)}): {robosuite_action}")
         obs_dict, reward, done, info = self.env.step(robosuite_action)
 
-        raw_success = self.env._check_success()
-        info["is_success"] = bool(raw_success)
+        # raw_success = self.env._check_success()
+        # info["is_success"] = bool(raw_success)
+
+        total_markers = self.env.num_markers
+        wiped_markers = len(self.env.wiped_markers)
+        percent_wiped = wiped_markers / total_markers
+        
+        info["is_success"] = percent_wiped
         
         flat_obs = self._flatten_obs(obs_dict)
         terminated = done

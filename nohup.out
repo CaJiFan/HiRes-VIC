@@ -1406,3 +1406,509 @@ Finished TQC on Wipe
 Starting TQC on Wipe for 5_000_000 steps...
 Date: sáb 07 mar 2026 06:45:14 CET
 ==================================================
+Finished TQC on Wipe
+run_Wipe.sh: line 55: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 56: syntax error: unexpected end of file
+Finished TQC on Wipe
+run_Wipe.sh: line 55: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 56: syntax error: unexpected end of file
+Finished TQC on Wipe
+All Door experiments completed!
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:15:09 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:15:17 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:15:25 CET
+==================================================
+Finished TQC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:16:32 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:16:39 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:16:46 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:16:58 CET
+==================================================
+run_Wipe.sh: line 5: 290118 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 290444 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:17:34 CET
+==================================================
+run_Wipe.sh: line 5: 291340 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:17:53 CET
+==================================================
+run_Wipe.sh: line 5: 291714 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:18:15 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:18:31 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 17:18:41 CET
+==================================================
+Finished TQC on Wipe
+run_Wipe.sh: line 58: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 59: syntax error: unexpected end of file
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: sáb 07 mar 2026 18:39:35 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 06:40:30 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 06:46:14 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 06:54:11 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 08:18:29 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 19:57:22 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 20:14:10 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 20:28:21 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: dom 08 mar 2026 21:56:16 CET
+==================================================
+Finished TQC on TiltedWipe
+run_Wipe.sh: line 55: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 56: syntax error: unexpected end of file
+Finished TQC on TiltedWipe
+All Door experiments completed!
+Finished TQC on TiltedWipe
+All Door experiments completed!
+Finished TQC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:05:01 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:05:29 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:05:36 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:05:50 CET
+==================================================
+run_Wipe.sh: line 5: 342225 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:10 CET
+==================================================
+run_Wipe.sh: line 5: 342556 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:13 CET
+==================================================
+run_Wipe.sh: line 5: 343318 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:17 CET
+==================================================
+run_Wipe.sh: line 5: 342907 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:20 CET
+==================================================
+run_Wipe.sh: line 5: 344118 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:26 CET
+==================================================
+run_Wipe.sh: line 5: 344721 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:29 CET
+==================================================
+run_Wipe.sh: line 5: 344487 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:32 CET
+==================================================
+run_Wipe.sh: line 5: 343962 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:06:36 CET
+==================================================
+run_Wipe.sh: line 5: 346029 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+run_Wipe.sh: line 55: e: command not found
+All Door experiments completed!
+run_Wipe.sh: line 5: 345730 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 345229 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 345450 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:08:45 CET
+==================================================
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:10:22 CET
+==================================================
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:10:30 CET
+==================================================
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:10:38 CET
+==================================================
+run_Wipe.sh: line 5: 348546 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:28 CET
+==================================================
+run_Wipe.sh: line 5: 347798 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:28 CET
+==================================================
+run_Wipe.sh: line 5: 347240 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:29 CET
+==================================================
+run_Wipe.sh: line 5: 348159 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:29 CET
+==================================================
+run_Wipe.sh: line 5: 349708 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:48 CET
+==================================================
+run_Wipe.sh: line 5: 349704 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:48 CET
+==================================================
+run_Wipe.sh: line 5: 349710 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:48 CET
+==================================================
+run_Wipe.sh: line 5: 349706 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:14:48 CET
+==================================================
+run_Wipe.sh: line 5: 351197 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 351266 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 351201 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 351251 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+All Door experiments completed!
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:18:43 CET
+==================================================
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:18:50 CET
+==================================================
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:18:57 CET
+==================================================
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: lun 09 mar 2026 16:19:04 CET
+==================================================
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 06:46:53 CET
+==================================================
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 06:47:02 CET
+==================================================
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 07:06:58 CET
+==================================================
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 07:08:47 CET
+==================================================
+run_Wipe.sh: line 5: 361130 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 11:22:02 CET
+==================================================
+run_Wipe.sh: line 5: 363710 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 11:22:02 CET
+==================================================
+run_Wipe.sh: line 5: 360899 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 11:22:02 CET
+==================================================
+run_Wipe.sh: line 5: 363464 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on DeltaWipe
+==================================================
+Starting TQC on DeltaWipe for 5_000_000 steps...
+Date: mar 10 mar 2026 11:22:02 CET
+==================================================
+Finished TQC on DeltaWipe
+All Door experiments completed!
+Finished TQC on DeltaWipe
+All Door experiments completed!
+Finished TQC on DeltaWipe
+run_Wipe.sh: line 55: e: command not found
+All Door experiments completed!
+Finished TQC on DeltaWipe
+All Door experiments completed!
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: mié 11 mar 2026 11:43:39 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: mié 11 mar 2026 11:43:50 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: mié 11 mar 2026 11:44:00 CET
+==================================================
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: mié 11 mar 2026 11:44:05 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 02:00:15 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 02:10:23 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 02:20:19 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 02:31:07 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 16:15:05 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 16:32:47 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 17:04:28 CET
+==================================================
+Finished TQC on TiltedWipe
+==================================================
+Starting TQC on TiltedWipe for 5_000_000 steps...
+Date: jue 12 mar 2026 17:07:50 CET
+==================================================
+run_Wipe.sh: line 5: 409939 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 410674 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+run_Wipe.sh: line 55: e: command not found
+All Door experiments completed!
+run_Wipe.sh: line 5: 410409 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 409579 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished TQC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 01:29:09 CET
+==================================================
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 01:29:21 CET
+==================================================
+Finished SAC on DeltaWipe
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 09:14:22 CET
+==================================================
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 59: EED: command not found
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 09:44:42 CET
+==================================================
+run_Wipe.sh: line 5: 426743 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on DeltaWipe
+run_Wipe.sh: line 66: un_train: command not found
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 10:56:00 CET
+==================================================
+run_Wipe.sh: line 5: 426156 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on DeltaWipe
+run_Wipe.sh: line 66: n_train: command not found
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 10:56:00 CET
+==================================================
+run_Wipe.sh: line 5: 428717 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on DeltaWipe
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 10:56:28 CET
+==================================================
+run_Wipe.sh: line 5: 428723 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on DeltaWipe
+All Door experiments completed!
+run_Wipe.sh: line 5: 429568 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on DeltaWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 10:58:19 CET
+==================================================
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 10:59:09 CET
+==================================================
+Finished SAC on DeltaWipe
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 18:46:31 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 5_000_000 steps...
+Date: vie 13 mar 2026 18:57:26 CET
+==================================================
+Finished SAC on DeltaWipe
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: sáb 14 mar 2026 02:39:18 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 5_000_000 steps...
+Date: sáb 14 mar 2026 02:46:46 CET
+==================================================
+Finished SAC on DeltaWipe
+==================================================
+Starting SAC on DeltaWipe for 5_000_000 steps...
+Date: sáb 14 mar 2026 10:08:22 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 5_000_000 steps...
+Date: sáb 14 mar 2026 10:23:40 CET
+==================================================
+Finished SAC on DeltaWipe
+All Door experiments completed!
+Finished SAC on TiltedWipe
+All Door experiments completed!
