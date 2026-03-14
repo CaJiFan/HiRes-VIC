@@ -29,3 +29,5 @@ matplotlib
 torch
 
 seaborn
+
+wandb
