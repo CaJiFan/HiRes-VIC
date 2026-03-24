@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define a function to run training so we don't repeat code
-TASK="DeltaWipe"
+TASK="TiltedWipe"
 run_train() {
     ENV_NAME=$1
     ALGO=$2
@@ -44,13 +44,15 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-SEED=3
-TASK="DeltaWipe"
-run_train $TASK "SAC" 5_000_000 "TRUE" "TRUE" "VIC_DELTA" $SEED
-run_train $TASK "SAC" 5_000_000 "TRUE" "FALSE" "VIC_DELTA" $SEED
-run_train $TASK "SAC" 5_000_000 "FALSE" "TRUE" "VIC_DELTA" $SEED
-run_train $TASK "SAC" 5_000_000 "FALSE" "FALSE" "VIC_DELTA" $SEED
+for SEED in 0 1 2 
+do
+    run_train $TASK "SAC" 3_500_000 "TRUE" "TRUE" "FULL_GRL_CONDENSED_FALSE" $SEED 
+    run_train $TASK "SAC" 3_500_000 "TRUE" "FALSE" "SPD_ONLY_CONDENSED_FALSE" $SEED 
+    run_train $TASK "SAC" 3_500_000 "FALSE" "TRUE" "LIE_ONLY_CONDENSED_FALSE" $SEED 
+    run_train $TASK "SAC" 3_500_000 "FALSE" "FALSE" "BASELINE_CONDENSED_FALSE" $SEED 
+done
 
 
+wait
 
 echo "All Door experiments completed!"

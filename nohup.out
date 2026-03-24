@@ -1912,3 +1912,603 @@ Finished SAC on DeltaWipe
 All Door experiments completed!
 Finished SAC on TiltedWipe
 All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 17 mar 2026 01:20:54 CET
+==================================================
+Date: mar 17 mar 2026 01:20:54 CET
+Date: mar 17 mar 2026 01:20:54 CET
+==================================================
+==================================================
+Date: mar 17 mar 2026 01:20:54 CET
+==================================================
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 17 mar 2026 16:01:07 CET
+==================================================
+Date: mar 17 mar 2026 16:01:07 CET
+Date: mar 17 mar 2026 16:01:07 CET
+==================================================
+==================================================
+Date: mar 17 mar 2026 16:01:07 CET
+==================================================
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:26 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+Date: sáb 21 mar 2026 01:42:35 CET
+==================================================
+run_Wipe.sh: line 5: 583446 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583444 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583440 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583439 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583437 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585205 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+run_Wipe.sh: line 5: 583448 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583445 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583442 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583438 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583443 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+run_Wipe.sh: line 5: 583447 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 583441 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+All Door experiments completed!
+run_DeltaWipe.sh: line 5: 585198 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+run_DeltaWipe.sh: line 5: 585203 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585214 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585210 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585208 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585211 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585191 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585212 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585217 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585213 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_DeltaWipe.sh: line 5: 585216 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:53:14 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 01:53:17 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 02:05:11 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 02:05:17 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 11:58:48 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 12:24:13 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 12:28:17 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 12:28:36 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 22:11:22 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 22:40:05 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 22:48:57 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: sáb 21 mar 2026 22:52:54 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 08:02:34 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 08:35:46 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 08:59:14 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 09:02:41 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 17:39:50 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 18:21:54 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 18:53:39 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: dom 22 mar 2026 19:11:02 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 03:55:51 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 04:41:57 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 05:21:07 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 05:53:24 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 13:53:34 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 14:55:59 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 15:43:02 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 16:24:49 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: lun 23 mar 2026 23:37:20 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:46:19 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:46:42 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:47:05 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:47:27 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:47:49 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:48:12 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:48:34 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:48:56 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 00:49:19 CET
+==================================================
+Finished SAC on TiltedWipe
+All Door experiments completed!
+run_Wipe_25markers.sh: line 5: 630192 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:23:45 CET
+==================================================
+run_DeltaWipe.sh: line 5: 634533 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:23:45 CET
+==================================================
+run_Wipe.sh: line 5: 629773 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:23:45 CET
+==================================================
+run_Wipe_25markers.sh: line 5: 639711 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+run_DeltaWipe.sh: line 5: 639713 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:23:59 CET
+==================================================
+Date: mar 24 mar 2026 01:23:59 CET
+==================================================
+run_Wipe.sh: line 5: 639715 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:23:59 CET
+==================================================
+run_Wipe.sh: line 5: 640876 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+run_DeltaWipe.sh: line 5: 640874 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:24:10 CET
+==================================================
+Date: mar 24 mar 2026 01:24:10 CET
+==================================================
+run_Wipe_25markers.sh: line 5: 640873 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:24:10 CET
+==================================================
+run_Wipe.sh: line 5: 642036 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+run_DeltaWipe.sh: line 5: 642034 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:24:26 CET
+==================================================
+Date: mar 24 mar 2026 01:24:26 CET
+==================================================
+run_Wipe_25markers.sh: line 5: 642044 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:24:26 CET
+==================================================
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:26:11 CET
+==================================================
+Date: mar 24 mar 2026 01:26:11 CET
+==================================================
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:26:40 CET
+==================================================
+Date: mar 24 mar 2026 01:26:40 CET
+==================================================
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:26:59 CET
+Date: mar 24 mar 2026 01:26:59 CET
+==================================================
+==================================================
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+All Door experiments completed!
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:28:15 CET
+==================================================
+Date: mar 24 mar 2026 01:28:15 CET
+==================================================
+run_Wipe.sh: line 5: 645932 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 5: 645933 Killed                  python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SEED_${SEED}.log" 2>&1
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 62: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 63: syntax error: unexpected end of file
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 01:31:58 CET
+==================================================
+Date: mar 24 mar 2026 01:31:58 CET
+==================================================
+Finished SAC on TiltedWipe
+Finished SAC on TiltedWipe
+run_Wipe.sh: line 66: unexpected EOF while looking for matching `"'
+run_Wipe.sh: line 67: syntax error: unexpected end of file
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:09:14 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:09:16 CET
+==================================================
+run_Wipe.sh: line 53: syntax error near unexpected token `for'
+run_Wipe.sh: line 53: `    for STIFF_PENALTY in $(seq 0.01 0.005 0.02); do'
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:34 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:37 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:39 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:41 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:44 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:46 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:48 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:51 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:53 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:55 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:14:58 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:15:00 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:15:02 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:15:05 CET
+==================================================
+Finished SAC on TiltedWipe
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:15:07 CET
+==================================================
+run_Wipe.sh: line 53: syntax error near unexpected token `for'
+run_Wipe.sh: line 53: `    for STIFF_PENALTY in 0.01 0.005 0.02 do'
+run_Wipe.sh: line 53: syntax error near unexpected token `for'
+run_Wipe.sh: line 53: `    for STIFF_PENALTY in $(seq 0.01 0.005 0.02); do'
+==================================================
+Starting SAC on TiltedWipe for 3_500_000 steps...
+Date: mar 24 mar 2026 13:19:29 CET
+==================================================

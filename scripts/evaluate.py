@@ -28,7 +28,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 class TiltedWipe(Wipe):
     """Custom Wipe environment with a tilted table."""
-    def __init__(self, tilt_angle_degrees=45.0, **kwargs):
+    def __init__(self, tilt_angle_degrees=15.0, **kwargs):
         self.tilt_angle_rad = np.radians(tilt_angle_degrees)
         super().__init__(**kwargs)
 
@@ -61,7 +61,8 @@ def parse_args():
 # =================================================================
 def make_env(args):
     controller_config = None
-    is_vic = "VIC" in args.run_name
+    # is_vic = "VIC" in args.run_name
+    is_vic = True
     kp_limits = [20, 200] # [50, 300]
     env_name = args.env
 
@@ -75,24 +76,59 @@ def make_env(args):
         arm_config = controller_config["body_parts"]["right"]
         arm_config["type"] = "OSC_POSE"
 
+        # "variable_kp": Agent outputs [Pos, Ori, Kp]. Damping (Kd) is auto-calculated.
+        # "variable":  Agent outputs [Pos, Ori, Kp, Kd]. Both are learned.
+        # "fixed": Agent outputs [Pos, Ori]. Kp is constant.
         arm_config["impedance_mode"] = "riemannian_kp" if args.use_spd else "variable_kp"
         
         # 0 = Completely limp (gravity comp only), 300 = Very stiff
         arm_config["kp_limits"] = kp_limits 
         arm_config["damping_ratio_limits"] = [1.0, 1.0] # Force critical damping
     
-    task_kwargs = {
-        "has_renderer": False,
-        "has_offscreen_renderer": True, # for saving rollout videos later
-        "use_camera_obs": False,
-        "reward_shaping": True,
-        "horizon": 300 if env_name == "Door" else 1000, # Shorter episodes for Door
-        "control_freq": 20,              #  50ms per step
-        "kp_limits": kp_limits if is_vic else None,  # Only pass kp_limits if using VIC
-    }
+        task_kwargs = {
+            "has_renderer": False,
+            "has_offscreen_renderer": True,
+            "use_camera_obs": False,
+            "reward_shaping": True,
+            "horizon": 300 if env_name == "Door" else 1000, # Shorter episodes for Door
+            "control_freq": 20,              #  50ms per step
+            "kp_limits": kp_limits if is_vic else None,  # Only pass kp_limits if using VIC
+            "task_config": {
+                "arm_limit_collision_penalty": -10.0,  # penalty for reaching joint limit or arm collision (except the wiping tool) with the table
+                "wipe_contact_reward": 0.01,  # reward for contacting something with the wiping tool
+                "unit_wiped_reward": 50.0,  # reward per peg wiped
+                "ee_accel_penalty": 0,  # penalty for large end-effector accelerations
+                "excess_force_penalty_mul": 0.05,  # penalty for each step that the force is over the safety threshold
+                "distance_multiplier": 5.0,  # multiplier for the dense reward inversely proportional to the mean location of the pegs to wipe
+                "distance_th_multiplier": 5.0,  # multiplier in the tanh function for the aforementioned reward
+                # settings for table top
+                "table_full_size": [0.5, 0.8, 0.05],  # Size of tabletop
+                "table_offset": [0.15, 0, 0.9],  # Offset of table (z dimension defines max height of table)
+                "table_friction": [0.03, 0.005, 0.0001],  # Friction parameters for the table
+                "table_friction_std": 0,  # Standard deviation to sample different friction parameters for the table each episode
+                "table_height": 0.0,  # Additional height of the table over the default location
+                "table_height_std": 0.0,  # Standard deviation to sample different heigths of the table each episode
+                "line_width": 0.04,  # Width of the line to wipe (diameter of the pegs)
+                "two_clusters": False,  # if the dirt to wipe is one continuous line or two
+                "coverage_factor": 0.6,  # how much of the table surface we cover
+                "num_markers": 25,  # How many particles of dirt to generate in the environment
+                # settings for thresholds
+                "contact_threshold": 1.0,  # Minimum eef force to qualify as contact [N]
+                "pressure_threshold": 0.5,  # force threshold (N) to overcome to get increased contact wiping reward
+                "pressure_threshold_max": 60.0,  # maximum force allowed (N)
+                # misc settings
+                "print_results": False,  # Whether to print results or not
+                "get_info": False,  # Whether to grab info after each env step if not
+                "use_robot_obs": True,  # if we use robot observations (proprioception) as input to the policy
+                "use_contact_obs": True,  # if we use a binary observation for whether robot is in contact or not
+                "early_terminations": True,  # Whether we allow for early terminations or not
+                "use_condensed_obj_obs": False,  # Whether to use condensed object observation representation (only applicable if obj obs is active)
+
+            }
+        }
 
     if args.env == "TiltedWipe":
-        task_kwargs["tilt_angle_degrees"] = 35.0
+        task_kwargs["tilt_angle_degrees"] = 45.0
 
     env = RobosuiteGymnasiumWrapper(
         env_name=env_name,
@@ -123,7 +159,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     env_name = args.env
-    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SPD_{str(args.use_spd).upper()}_LG_{str(args.use_lie).upper()}_SEED_{args.seed}'
+    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SEED_{args.seed}'
 
     model_path = f"./outputs/models/{run_name}_final"
     video_dir = f"./outputs/videos/{run_name}"

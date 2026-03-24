@@ -6,7 +6,7 @@ class TiltedWipe(Wipe):
     """
     Custom Wipe environment with a tilted table.
     """
-    def __init__(self, tilt_angle_degrees=15.0, **kwargs):
+    def __init__(self, tilt_angle_degrees=45.0, **kwargs):
         # Convert to radians and round it nicely for the XML
         print(f"Initializing TiltedWipe with a tilt angle of {tilt_angle_degrees} degrees.")
         self.tilt_angle_rad = np.radians(tilt_angle_degrees)

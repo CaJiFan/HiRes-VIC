@@ -8,10 +8,8 @@ run_train() {
     STEPS=$3
     USE_SPD=$4
     USE_LG=$5
-    NUM_MARKERS=$6
-    STIFF_PENALTY=$7
-    EXP_NAME=$8
-    SEED=$9
+    EXP_NAME=$6
+    SEED=$7
     
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -25,8 +23,8 @@ run_train() {
         --algorithm "$ALGO"
         --total_timesteps "$STEPS"
         --run_name "$EXP_NAME"
-        --num_markers "$NUM_MARKERS"
-        --stiff_penalty "$STIFF_PENALTY"
+        --num_markers 25
+        --use_condensed_obj_obs  # Enable condensed object observation representation for all experiments
         --seed "$SEED"
     )
 
@@ -40,7 +38,7 @@ run_train() {
     fi
 
     # 3. Execute the command
-    python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SEED_${SEED}.log" 2>&1
+    python3 "${ARGS[@]}" > "logs/${ENV_NAME}_${ALGO}_${EXP_NAME}_SPD_${USE_SPD}_LG_${USE_LG}_SEED_${SEED}.log" 2>&1
     
     echo "Finished $ALGO on $ENV_NAME"
 }
@@ -48,20 +46,14 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-
-for NUM_MARKERS in 1 5 10 
+for SEED in 0 1 2 3
 do
-    for STIFF_PENALTY in 0.01 0.005 0.02 
-    do
-        for SEED in 3 2 1 0 
-        do
-            run_train $TASK "SAC" 3_500_000 "TRUE" "TRUE" $NUM_MARKERS $STIFF_PENALTY "FULL_GRL_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}" $SEED
-            run_train $TASK "SAC" 3_500_000 "TRUE" "FALSE" $NUM_MARKERS $STIFF_PENALTY "SPD_ONLY_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}" $SEED
-            run_train $TASK "SAC" 3_500_000 "FALSE" "TRUE" $NUM_MARKERS $STIFF_PENALTY "LIE_ONLY_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}" $SEED 
-            run_train $TASK "SAC" 3_500_000 "FALSE" "FALSE" $NUM_MARKERS $STIFF_PENALTY "BASELINE_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}" $SEED
-        done
-    done
+    run_train $TASK "SAC" 3_500_000 "TRUE" "TRUE" "FULL_GRL_CONDENSED_25_MARKERS" $SEED 
+    run_train $TASK "SAC" 3_500_000 "TRUE" "FALSE" "SPD_ONLY_CONDENSED_25_MARKERS" $SEED 
+    run_train $TASK "SAC" 3_500_000 "FALSE" "TRUE" "LIE_ONLY_CONDENSED_25_MARKERS" $SEED 
+    run_train $TASK "SAC" 3_500_000 "FALSE" "FALSE" "BASELINE_CONDENSED_25_MARKERS" $SEED 
 done
+
 
 wait
 

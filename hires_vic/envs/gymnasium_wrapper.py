@@ -29,26 +29,24 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         use_object_obs = task_kwargs.pop("use_object_obs", True)
         reward_shaping = task_kwargs.pop("reward_shaping", True)
 
-        self.min_kp, self.max_kp  = np.array(task_kwargs.pop("kp_limits", [10.0, 200.0]))
+        self.min_kp, self.max_kp  = np.array(task_kwargs.pop("kp_limits", [50.0, 300.0]))
         
         self.env = suite.make(
             env_name,
             robots=robots,
             controller_configs=controller_configs,
-            has_renderer=has_renderer,                   # Use the variable, not hardcoded False
+            has_renderer=has_renderer,
             has_offscreen_renderer=has_offscreen_renderer,
             use_camera_obs=use_camera_obs,
             use_object_obs=use_object_obs,
             reward_shaping=reward_shaping,
-            **task_kwargs # Pass any remaining arguments (like horizon, etc.)
+            **task_kwargs
         )
-
 
         # Action space
         action_dim = 9 # rot kp + pos + ori
 
         action_dim += 6 if self.use_spd_manifold else 3
-
         
         gripper_dim = self.env.action_dim - (18 if self.use_spd_manifold else 12)
         if gripper_dim > 0:
@@ -193,12 +191,13 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         max_force_threshold (float): Force limit (Newtons) before penalty kicks in (e.g., 20.0).
         terminate_on_unsafe (bool): If True, ends the episode immediately upon safety violation.
     """
-    def __init__(self, env, stiffness_penalty=0.0, force_penalty=0.0, max_force_threshold=30.0, terminate_on_unsafe=False):
+    def __init__(self, env, is_eval=False, stiffness_penalty=0.0, force_penalty=0.0, max_force_threshold=30.0, terminate_on_unsafe=False):
         super().__init__(env)
         self.stiffness_penalty = stiffness_penalty
         self.force_penalty = force_penalty
         self.max_force_threshold = max_force_threshold
         self.terminate_on_unsafe = terminate_on_unsafe
+        self.is_eval = is_eval
         
         # Internal counters for logging
         self.episode_stiffness_sum = 0.0
@@ -206,11 +205,25 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         self.episode_steps = 0
         self.violation_count = 0
 
+        self.ep_kp_trans_x = 0.0
+        self.ep_kp_trans_y = 0.0
+        self.ep_kp_trans_z = 0.0
+        self.ep_kp_rot_x = 0.0
+        self.ep_kp_rot_y = 0.0
+        self.ep_kp_rot_z = 0.0
+
     def reset(self, **kwargs):
         self.episode_stiffness_sum = 0.0
         self.episode_force_sum = 0.0
         self.episode_steps = 0
         self.violation_count = 0
+
+        self.ep_kp_trans_x = 0.0
+        self.ep_kp_trans_y = 0.0
+        self.ep_kp_trans_z = 0.0
+        self.ep_kp_rot_x = 0.0
+        self.ep_kp_rot_y = 0.0
+        self.ep_kp_rot_z = 0.0
         return self.env.reset(**kwargs)
 
     def step(self, action):
@@ -270,11 +283,11 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         # --- B. APPLY PENALTIES (REWARD MODIFICATION) ---
         
         # Force Penalty (Soft Constraint)
-        force_penalty_val = 0.0
-        if self.force_penalty > 0 and ee_force > self.max_force_threshold:
-            excess_force = ee_force - self.max_force_threshold
-            force_penalty_val = self.force_penalty * excess_force
-            reward -= force_penalty_val # Subtract from total reward
+        # force_penalty_val = 0.0
+        # if self.force_penalty > 0 and ee_force > self.max_force_threshold:
+        #     excess_force = ee_force - self.max_force_threshold
+        #     force_penalty_val = self.force_penalty * excess_force
+        #     reward -= force_penalty_val 
 
         # Stiffness Penalty (Energy Efficiency)
         stiffness_penalty_val = 0.0
@@ -285,13 +298,20 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         # LOGGING 
         self.episode_stiffness_sum += physical_stiffness
         self.episode_force_sum += ee_force
+        self.ep_kp_trans_x += kp_vals[0]
+        self.ep_kp_trans_y += kp_vals[1]
+        self.ep_kp_trans_z += kp_vals[2]
+        self.ep_kp_rot_x += kp_vals[3]
+        self.ep_kp_rot_y += kp_vals[4]
+        self.ep_kp_rot_z += kp_vals[5]
 
-        # Log instantaneous metrics (for debugging spikes)
-        info["physics/stiffness_step"] = physical_stiffness
-        info["physics/force_step"] = ee_force
-        info["reward/force_penalty"] = force_penalty_val
-        info["reward/stiffness_penalty"] = stiffness_penalty_val
-        info["safety/joint_violation"] = is_unsafe
+        # # Log instantaneous metrics (for debugging spikes)
+        # info["physics/stiffness_step"] = physical_stiffness
+        # info["physics/force_step"] = ee_force
+        # # info["reward/force_penalty"] = force_penalty_val
+        # info["reward/stiffness_penalty"] = stiffness_penalty_val
+        # info["safety/joint_violation"] = is_unsafe
+
 
         # Log Episode Averages (Only when episode ends)
         if terminated or truncated:
@@ -299,7 +319,13 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
             avg_force = self.episode_force_sum / max(1, self.episode_steps)
             
             info["physics/max_force_violation_count"] = self.violation_count
-            info["physics/avg_stiffness"] = avg_stiffness
+            # info["physics/avg_stiffness"] = avg_stiffness
+            info["physics/kp_trans_x_avg"] = self.ep_kp_trans_x / max(1, self.episode_steps)
+            info["physics/kp_trans_y_avg"] = self.ep_kp_trans_y / max(1, self.episode_steps)
+            info["physics/kp_trans_z_avg"] = self.ep_kp_trans_z / max(1, self.episode_steps)
+            info["physics/kp_rot_x_avg"] = self.ep_kp_rot_x / max(1, self.episode_steps)
+            info["physics/kp_rot_y_avg"] = self.ep_kp_rot_y / max(1, self.episode_steps)
+            info["physics/kp_rot_z_avg"] = self.ep_kp_rot_z / max(1, self.episode_steps)
             info["physics/avg_force"] = avg_force
 
         return obs, reward, terminated, truncated, info

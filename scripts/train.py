@@ -32,11 +32,14 @@ def parse_args():
     parser.add_argument("--run_name", type=str, default="baseline", help="Name for logging and saving models")
     parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm to use (default: PPO)")
     parser.add_argument("--n_envs", type=int, default=8, help="Number of parallel environments")
-    parser.add_argument("--total_timesteps", type=int, default=1_000_000, help="Total training timesteps")
+    parser.add_argument("--stiff_penalty", type=float, default=0.01, help="Number of parallel environments")
+    parser.add_argument("--total_timesteps", type=int, default=5_000_000, help="Total training timesteps")
     parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
+    parser.add_argument("--use_condensed_obj_obs", action="store_true", help="Enable condensed object observation representation")
     parser.add_argument("--seed", type=int, default=1, help="Random seed (e.g., 1, 2, 3)")
     parser.add_argument("--checkpoint", type=str, required=False, help="Path to the .zip checkpoint file")
+    parser.add_argument("--num_markers", type=int, default=10, help="Number of dirt particles in the environment")
     return parser.parse_args()
 
 def make_env(args, run_name, env_name, rank, seed=0):
@@ -45,8 +48,9 @@ def make_env(args, run_name, env_name, rank, seed=0):
     """
     def _init():
         controller_config = None
-        is_vic = "VIC" in run_name
-        kp_limits = [20, 200] # [50, 300]
+        # is_vic = "VIC" in run_name
+        is_vic = True
+        kp_limits = [50, 300] #[20, 200]
 
         if is_vic:
             controller_config = load_composite_controller_config(controller="BASIC", robot="panda")
@@ -75,10 +79,42 @@ def make_env(args, run_name, env_name, rank, seed=0):
             "horizon": 300 if env_name == "Door" else 1000, # Shorter episodes for Door
             "control_freq": 20,              #  50ms per step
             "kp_limits": kp_limits if is_vic else None,  # Only pass kp_limits if using VIC
+            "task_config": {
+                "arm_limit_collision_penalty": -10.0,  # penalty for reaching joint limit or arm collision (except the wiping tool) with the table
+                "wipe_contact_reward": 0.01,  # reward for contacting something with the wiping tool
+                "unit_wiped_reward": 50.0,  # reward per peg wiped
+                "ee_accel_penalty": 0,  # penalty for large end-effector accelerations
+                "excess_force_penalty_mul": 0.05,  # penalty for each step that the force is over the safety threshold
+                "distance_multiplier": 5.0,  # multiplier for the dense reward inversely proportional to the mean location of the pegs to wipe
+                "distance_th_multiplier": 5.0,  # multiplier in the tanh function for the aforementioned reward
+                # settings for table top
+                "table_full_size": [0.5, 0.8, 0.05],  # Size of tabletop
+                "table_offset": [0.15, 0, 0.9],  # Offset of table (z dimension defines max height of table)
+                "table_friction": [0.03, 0.005, 0.0001],  # Friction parameters for the table
+                "table_friction_std": 0,  # Standard deviation to sample different friction parameters for the table each episode
+                "table_height": 0.0,  # Additional height of the table over the default location
+                "table_height_std": 0.0,  # Standard deviation to sample different heigths of the table each episode
+                "line_width": 0.04,  # Width of the line to wipe (diameter of the pegs)
+                "two_clusters": False,  # if the dirt to wipe is one continuous line or two
+                "coverage_factor": 0.6,  # how much of the table surface we cover
+                "num_markers": args.num_markers,  # How many particles of dirt to generate in the environment
+                # settings for thresholds
+                "contact_threshold": 1.0,  # Minimum eef force to qualify as contact [N]
+                "pressure_threshold": 0.5,  # force threshold (N) to overcome to get increased contact wiping reward
+                "pressure_threshold_max": 60.0,  # maximum force allowed (N)
+                # misc settings
+                "print_results": False,  # Whether to print results or not
+                "get_info": False,  # Whether to grab info after each env step if not
+                "use_robot_obs": True,  # if we use robot observations (proprioception) as input to the policy
+                "use_contact_obs": True,  # if we use a binary observation for whether robot is in contact or not
+                "early_terminations": True,  # Whether we allow for early terminations or not
+                "use_condensed_obj_obs": args.use_condensed_obj_obs,  # Whether to use condensed object observation representation (only applicable if obj obs is active)
+
+            }
         }
 
         if "TILTED" in env_name.upper():
-            print(">>> Using tilted variant with 45 degree tilt...")
+            print(f">>> Using tilted variant with 45 degree tilt and condensed {args.use_condensed_obj_obs}...")
             task_kwargs["tilt_angle_degrees"] = 45.0
         
         env = RobosuiteGymnasiumWrapper(
@@ -86,16 +122,16 @@ def make_env(args, run_name, env_name, rank, seed=0):
             robots="Panda",
             controller_configs=controller_config,
             task_kwargs=task_kwargs,
-            use_spd_manifold=args.use_spd, 
+            use_spd_manifold=args.use_spd,
             use_lie_group=args.use_lie
         )
         
-        stiff_penalty = 0.01 if is_vic else 0.0
+        # stiff_penalty = 0.01 if is_vic else 0.0
         
         env = RobosuitePhysicsWrapper(
             env, 
-            stiffness_penalty=stiff_penalty, 
-            force_penalty=0.02, 
+            stiffness_penalty=args.stiff_penalty, 
+            force_penalty=0.02, # 0.02 
             max_force_threshold=35.0
         )
 
@@ -117,7 +153,7 @@ def main():
     print(f"🚀 Starting training for {args.env} with SEED: {args.seed}")
 
     env_name = args.env
-    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SPD_{str(args.use_spd).upper()}_LG_{str(args.use_lie).upper()}_SEED_{args.seed}'
+    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SEED_{args.seed}'
 
     wandb.init(
         project="HiRes-VIC",          # Name of your project dashboard
@@ -190,7 +226,7 @@ def main():
                 tau=0.002,              # For soft updates of the target network
                 target_entropy="auto", # Encourage exploration (tune based on action space)
                 train_freq=1,        # Train every step
-                gradient_steps=2,    # Take 4 gradient steps to match 4 new data points
+                gradient_steps=args.n_envs,    # Take 4 gradient steps to match 4 new data points
                 use_sde=False,            # Smooth robotic noise
                 # sde_sample_freq=8,
                 seed=args.seed,
