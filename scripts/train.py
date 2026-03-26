@@ -42,15 +42,16 @@ def parse_args():
     parser.add_argument("--num_markers", type=int, default=10, help="Number of dirt particles in the environment")
     return parser.parse_args()
 
-def make_env(args, run_name, env_name, rank, seed=0):
+def make_env(args, is_eval=False, rank=0, seed=0):
     """
     Utility function for multiprocessed env.
     """
     def _init():
         controller_config = None
         # is_vic = "VIC" in run_name
+        env_name = args.env
         is_vic = True
-        kp_limits = [50, 300] #[20, 200]
+        kp_limits = [1, 1000] #[20, 200]
 
         if is_vic:
             controller_config = load_composite_controller_config(controller="BASIC", robot="panda")
@@ -126,19 +127,15 @@ def make_env(args, run_name, env_name, rank, seed=0):
             use_lie_group=args.use_lie
         )
         
-        # stiff_penalty = 0.01 if is_vic else 0.0
         
         env = RobosuitePhysicsWrapper(
             env, 
+            is_eval=is_eval,
             stiffness_penalty=args.stiff_penalty, 
             force_penalty=0.02, # 0.02 
             max_force_threshold=35.0
         )
 
-        # print(f"Initialized environment: {env_name} | VIC Mode: {is_vic}")
-        # print(f"Applying stiffness penalty: {stiff_penalty}")
-        # print(f"Max force threshold: 35.0N")
-        # print(f"Force penalty: 0.02 per Newton above threshold")
        
         env.reset(seed=seed + rank) # Distinct seed for each worker
         return env
@@ -171,7 +168,7 @@ def main():
     )
 
     # Create Vectorized Environment
-    env_fns = [make_env(args, run_name, args.env, i) for i in range(args.n_envs)]
+    env_fns = [make_env(args, is_eval=False, rank=i) for i in range(args.n_envs)]
     env = SubprocVecEnv(env_fns)
     env = VecMonitor(env)
 
@@ -309,7 +306,7 @@ def main():
     #     # remaining_steps = 1_000_000
     
     print(f'Running for {remaining_steps} timesteps...')
-    eval_env_fn = make_env(args, run_name, args.env, rank=0, seed=999)
+    eval_env_fn = make_env(args, is_eval=True, rank=0, seed=42)
     eval_env = DummyVecEnv([eval_env_fn])
     eval_env = VecMonitor(eval_env)
     
@@ -317,18 +314,18 @@ def main():
         eval_env,
         best_model_save_path=f"./logs/best_models/{run_name}/",
         log_path=f"./logs/eval/{run_name}/",
-        eval_freq=max(100_000 // args.n_envs, 1),
+        eval_freq=max(200_000 // args.n_envs, 1),
         n_eval_episodes=10, # Run 10 deterministic episodes
         deterministic=True,
         render=False
     )
-    checkpoint_callback = CheckpointCallback(
-        save_freq=1_000_000, 
-        save_path=f"./outputs/checkpoints/{run_name}",
-        name_prefix="model",
-        save_replay_buffer=True,
-        save_vecnormalize=True
-    )
+    # checkpoint_callback = CheckpointCallback(
+    #     save_freq=1_000_000, 
+    #     save_path=f"./outputs/checkpoints/{run_name}",
+    #     name_prefix="model",
+    #     save_replay_buffer=True,
+    #     save_vecnormalize=True
+    # )
 
     logging_callback = RobosuiteLoggingCallback()
 
@@ -342,7 +339,7 @@ def main():
     print(f"Starting training for {run_name}...")
     model.learn(
         total_timesteps=remaining_steps, 
-        callback=[checkpoint_callback, logging_callback, wandb_callback, eval_callback], 
+        callback=[logging_callback, wandb_callback, eval_callback], 
         reset_num_timesteps=False
     )
     
