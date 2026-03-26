@@ -28,6 +28,8 @@ class RobosuiteLoggingCallback(BaseCallback):
                         self.logger.record("physics/avg_stiffness", info["physics/avg_stiffness"])
                     if "physics/avg_force" in info:
                         self.logger.record("physics/avg_force", info["physics/avg_force"])
+                    if "physics/raw_wipe_percentage" in info:
+                        self.logger.record("physics/raw_wipe_percentage", info["physics/raw_wipe_percentage"])
                     if "physics/max_force_violation_count" in info:
                         self.logger.record("safety/max_force_violations", info["physics/max_force_violation_count"])
                     if "physics/kp_trans_x_avg" in info:

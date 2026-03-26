@@ -345,7 +345,9 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
             total_markers = gymwrapper_env.num_markers
             wiped_markers = len(gymwrapper_env.wiped_markers)
             percent_wiped = wiped_markers / total_markers
-        
+
+            print('total markers', total_markers, 'wiped markers', wiped_markers, '%', percent_wiped )
+
             info["physics/raw_wipe_percentage"] = percent_wiped
 
             if self.is_eval and len(self.kp_history) > 0:
