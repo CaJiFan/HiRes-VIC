@@ -53,7 +53,7 @@ for NUM_MARKERS in 1 5 10
 do
     for STIFF_PENALTY in 0.01 0.005 0.02 
     do
-        for SEED in 2 1 0 
+        for SEED in 3 2 1 0 
         do
             run_train $TASK "SAC" 3_500_000 "TRUE" "TRUE" $NUM_MARKERS $STIFF_PENALTY "FULL_GRL_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}" $SEED
             run_train $TASK "SAC" 3_500_000 "TRUE" "FALSE" $NUM_MARKERS $STIFF_PENALTY "SPD_ONLY_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}" $SEED

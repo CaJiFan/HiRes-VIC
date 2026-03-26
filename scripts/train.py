@@ -36,6 +36,8 @@ def parse_args():
     parser.add_argument("--total_timesteps", type=int, default=5_000_000, help="Total training timesteps")
     parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
+    parser.add_argument("--kp_max", type=float, default=300.0, help="Maximum stiffness limit (N/m)")
+    parser.add_argument("--kp_min", type=float, default=0.0, help="Minimum stiffness limit (N/m)")
     parser.add_argument("--use_condensed_obj_obs", action="store_true", help="Enable condensed object observation representation")
     parser.add_argument("--seed", type=int, default=1, help="Random seed (e.g., 1, 2, 3)")
     parser.add_argument("--checkpoint", type=str, required=False, help="Path to the .zip checkpoint file")
@@ -51,7 +53,8 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         # is_vic = "VIC" in run_name
         env_name = args.env
         is_vic = True
-        kp_limits = [1, 1000] #[20, 200]
+        # kp_limits = [1, 1000] #[20, 200]
+        kp_limits = [args.kp_min, args.kp_max]
 
         if is_vic:
             controller_config = load_composite_controller_config(controller="BASIC", robot="panda")
