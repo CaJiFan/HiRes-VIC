@@ -97,7 +97,6 @@ class RiemannianController(Controller):
             self.control_dim += 6
         elif self.impedance_mode == "riemannian_kp":
             self.control_dim += 12
-
         # limits
         self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
         self.orientation_limits = np.array(orientation_limits) if orientation_limits is not None else orientation_limits
@@ -159,10 +158,10 @@ class RiemannianController(Controller):
             self.kp_pos_matrix = kp_pos_flat.reshape((3, 3))
             # self.kp_pos_matrix = np.clip(self.kp_pos_matrix, self.kp_min, self.kp_max)
 
-            # 1. Ensure absolute symmetry (just in case)
+            # Ensure absolute symmetry
             kp_sym = (self.kp_pos_matrix + self.kp_pos_matrix.T) / 2.0
 
-            # 2. Fast eigendecomposition (specifically for symmetric/Hermitian matrices)
+            # Fast eigendecomposition (specifically for symmetric/Hermitian matrices)
             eigenvalues, eigenvectors = np.linalg.eigh(kp_sym)
             eigenvalues = np.maximum(eigenvalues, 0.0)
 
@@ -482,6 +481,7 @@ class RiemannianController(Controller):
             :Mode `'fixed'`: [joint pos command]
             :Mode `'variable'`: [damping_ratio values, kp values, joint pos command]
             :Mode `'variable_kp'`: [kp values, joint pos command]
+            :Mode `'riemannian_kp'`: [Mandel notiation, kp rot, pose command]
 
         Returns:
             2-tuple:

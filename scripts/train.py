@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument("--total_timesteps", type=int, default=5_000_000, help="Total training timesteps")
     parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
+    parser.add_argument("--use_diag", action="store_true", help="Enable Diagonal SPD Riemannian Manifold")
     parser.add_argument("--kp_max", type=float, default=300.0, help="Maximum stiffness limit (N/m)")
     parser.add_argument("--kp_min", type=float, default=0.0, help="Minimum stiffness limit (N/m)")
     parser.add_argument("--use_condensed_obj_obs", action="store_true", help="Enable condensed object observation representation")
@@ -127,7 +128,8 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             controller_configs=controller_config,
             task_kwargs=task_kwargs,
             use_spd_manifold=args.use_spd,
-            use_lie_group=args.use_lie
+            use_lie_group=args.use_lie,
+            use_diag_manifold=args.use_diag
         )
         
         
@@ -166,7 +168,11 @@ def main():
             "env": args.env,
             "total_timesteps": args.total_timesteps,
             "n_envs": args.n_envs,
-            "is_vic": "VIC" in run_name
+            "is_vic": true,
+            "use_spd": args.use_spd,
+            "use_lie": args.use_lie,
+            "use_diag": args.use_diag,
+            "kp_max": args.kp_max
         }
     )
 

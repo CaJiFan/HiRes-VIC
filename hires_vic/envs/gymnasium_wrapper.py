@@ -12,7 +12,16 @@ import wandb
 
 
 class RobosuiteGymnasiumWrapper(gym.Env):
-    def __init__(self, env_name, robots, use_spd_manifold=False, use_lie_group=False, controller_configs=None, task_kwargs=None):
+    def __init__(
+        self, 
+        env_name, 
+        robots, 
+        use_spd_manifold=False, 
+        use_lie_group=False, 
+        use_diag_manifold=False, 
+        controller_configs=None, 
+        task_kwargs=None
+    ):
         """
         Wraps a Robosuite environment to be compatible with Gymnasium.
         """ 
@@ -120,11 +129,8 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         return flat_obs, {}
 
     def step(self, action):
-        idx = 0
-
         if self.use_spd_manifold:
-            mandel_params = action[idx:idx+6].copy()
-            idx+=6
+            mandel_params = action[:6].copy()
 
             log_min = math.log(self.min_kp)
             log_max = math.log(self.max_kp)
@@ -151,6 +157,25 @@ class RobosuiteGymnasiumWrapper(gym.Env):
                 action[12:15],       # 3 elements: ori
                 action[15:]          # Remaining elements (Gripper, if any)
             ])
+
+        elif self.use_diag_manifold:
+            # action[:6] contains 3 translational and 3 rotational stiffnesses
+            kp_raw = action[:6].copy()
+            
+            # Use np.log in case self.min_kp becomes an array later!
+            log_min = np.log(self.min_kp)
+            log_max = np.log(self.max_kp)
+            
+            # 1. Map [-1, 1] -> [log_min, log_max]
+            log_kp = log_min + 0.5 * (kp_raw + 1.0) * (log_max - log_min)
+            
+            # 2. The Scalar Exponential Map (Flattens the SPD manifold to a diagonal)
+            kp_scaled = np.exp(log_kp)
+            
+            robosuite_action = np.concatenate([
+                kp_scaled,      # 6 elements (Trans + Rot Kp)
+                action[6:],     # The rest of the action space (pos, ori, gripper)
+            ])
             
         else:
             # Standard baseline execution
@@ -159,14 +184,14 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         # print(f"Scaled Robosuite Action ({len(robosuite_action)}): {robosuite_action}")
         obs_dict, reward, done, info = self.env.step(robosuite_action)
 
-        # raw_success = self.env._check_success()
-        # info["is_success"] = bool(raw_success)
+        raw_success = self.env._check_success()
+        info["is_success"] = bool(raw_success)
 
-        total_markers = self.env.num_markers
-        wiped_markers = len(self.env.wiped_markers)
-        percent_wiped = wiped_markers / total_markers
+        # total_markers = self.env.num_markers
+        # wiped_markers = len(self.env.wiped_markers)
+        # percent_wiped = wiped_markers / total_markers
         
-        info["is_success"] = percent_wiped
+        # info["is_success"] = percent_wiped
         
         flat_obs = self._flatten_obs(obs_dict)
         terminated = done
@@ -342,11 +367,9 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
             # avg_stiffness = self.episode_stiffness_sum / max(1, self.episode_steps)
             # info["physics/avg_stiffness"] = avg_stiffness
 
-            total_markers = gymwrapper_env.num_markers
-            wiped_markers = len(gymwrapper_env.wiped_markers)
+            total_markers = robosuite_env.num_markers
+            wiped_markers = len(robosuite_env.wiped_markers)
             percent_wiped = wiped_markers / total_markers
-
-            print('total markers', total_markers, 'wiped markers', wiped_markers, '%', percent_wiped )
 
             info["physics/raw_wipe_percentage"] = percent_wiped
 
@@ -356,13 +379,15 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
                 eval_kp_avgs = np.mean(history_array, axis=0)
 
                 # 2. Send the plots AND the exact numerical averages to WandB!
+                print('total markers', total_markers, 'wiped markers', wiped_markers, '%', percent_wiped )
                 wandb.log({
                     "eval/kp_trans_x_avg": eval_kp_avgs[0],
                     "eval/kp_trans_y_avg": eval_kp_avgs[1],
                     "eval/kp_trans_z_avg": eval_kp_avgs[2],
                     "eval/kp_rot_x_avg": eval_kp_avgs[3],
                     "eval/kp_rot_y_avg": eval_kp_avgs[4],
-                    "eval/kp_rot_z_avg": eval_kp_avgs[5]
+                    "eval/kp_rot_z_avg": eval_kp_avgs[5],
+                    "eval/raw_wipe_percentage": percent_wiped
                 })
                 
             #     # --- Figure 1: Translational Stiffness ---
