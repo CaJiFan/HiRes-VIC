@@ -28,7 +28,8 @@ class RobosuiteGymnasiumWrapper(gym.Env):
 
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
-        print(f"🔧 Robosuite Wrapper Initialized | SPD: {self.use_spd_manifold} | Lie Group: {self.use_lie_group}")
+        self.use_diag_manifold = use_diag_manifold
+        print(f"🔧 Robosuite Wrapper Initialized | SPD: {self.use_spd_manifold} | Lie Group: {self.use_lie_group} | Diag Manifold: {self.use_diag_manifold}")
 
         if task_kwargs is None:
             task_kwargs = {}
