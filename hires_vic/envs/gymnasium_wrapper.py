@@ -381,15 +381,14 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
 
                 # 2. Send the plots AND the exact numerical averages to WandB!
                 print('total markers', total_markers, 'wiped markers', wiped_markers, '%', percent_wiped )
-                wandb.log({
-                    "eval/kp_trans_x_avg": eval_kp_avgs[0],
-                    "eval/kp_trans_y_avg": eval_kp_avgs[1],
-                    "eval/kp_trans_z_avg": eval_kp_avgs[2],
-                    "eval/kp_rot_x_avg": eval_kp_avgs[3],
-                    "eval/kp_rot_y_avg": eval_kp_avgs[4],
-                    "eval/kp_rot_z_avg": eval_kp_avgs[5],
-                    "eval/raw_wipe_percentage": percent_wiped
-                })
+
+                info["eval/kp_trans_x_avg"] =  eval_kp_avgs[0]
+                info["eval/kp_trans_y_avg"] =  eval_kp_avgs[1]
+                info["eval/kp_trans_z_avg"] =  eval_kp_avgs[2]
+                info["eval/kp_rot_x_avg"] =  eval_kp_avgs[3]
+                info["eval/kp_rot_y_avg"] =  eval_kp_avgs[4]
+                info["eval/kp_rot_z_avg"] =  eval_kp_avgs[5]
+                info["eval/raw_wipe_percentage"] =  percent_wiped
                 
             #     # --- Figure 1: Translational Stiffness ---
             #     fig_trans, ax_trans = plt.subplots(figsize=(10, 6), dpi=150)

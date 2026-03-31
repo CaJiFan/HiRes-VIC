@@ -12,16 +12,21 @@ class RobosuiteLoggingCallback(BaseCallback):
             for idx, done in enumerate(dones):
                 if done:  # Only log when the episode finishes
                     info = infos[idx]
-                    
-                    # avg_stiff = info.get("physics/avg_stiffness", -1)
-                    # avg_force = info.get("physics/avg_force", -1)
-                    # print(f"\n[DEBUG CALLBACK] Episode Finished! "
-                        #   f"Avg Stiff: {avg_stiff:.2f} | "
-                        #   f"Avg Force: {avg_force:.2f} N\n")
-                    
+
                     # Log Standard Metrics (if available)
                     if "success" in info:
                         self.logger.record("rollout/success_rate", float(info["success"]))
+
+                    if "eval/raw_wipe_percentage" in info:
+                        self.logger.record("eval/raw_wipe_percentage", info["eval/raw_wipe_percentage"])
+                        self.logger.record("eval/kp_trans_x_avg", info["eval/kp_trans_x_avg"])
+                        self.logger.record("eval/kp_trans_y_avg", info["eval/kp_trans_y_avg"])
+                        self.logger.record("eval/kp_trans_z_avg", info["eval/kp_trans_z_avg"])
+                        self.logger.record("eval/kp_rot_x_avg", info["eval/kp_rot_x_avg"])
+                        self.logger.record("eval/kp_rot_y_avg", info["eval/kp_rot_y_avg"])
+                        self.logger.record("eval/kp_rot_z_avg", info["eval/kp_rot_z_avg"])
+                        
+                        self.logger.record("time/total_timesteps", self.num_timesteps)
                     
                     # Log New Physics Metrics (from our wrapper)
                     if "physics/avg_stiffness" in info:

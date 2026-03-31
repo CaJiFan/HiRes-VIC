@@ -155,11 +155,14 @@ def main():
     print(f"🚀 Starting training for {args.env} with SEED: {args.seed}")
 
     env_name = args.env
-    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SEED_{args.seed}'
+    # Not including seed in the run name so that we can group different seeds together in WandB UI.
+    # The seed is logged as a config parameter instead.
+    wandb_run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}' 
+    run_name = f'{wandb_run_name}_SEED_{args.seed}'
 
     wandb.init(
         project="HiRes-VIC",          
-        name=run_name,                
+        name=wandb_run_name,                
         sync_tensorboard=True,        
         monitor_gym=True,             
         save_code=True,              
