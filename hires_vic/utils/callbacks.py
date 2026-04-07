@@ -16,17 +16,6 @@ class RobosuiteLoggingCallback(BaseCallback):
                     # Log Standard Metrics (if available)
                     if "success" in info:
                         self.logger.record("rollout/success_rate", float(info["success"]))
-
-                    if "eval/raw_wipe_percentage" in info:
-                        self.logger.record("eval/raw_wipe_percentage", info["eval/raw_wipe_percentage"])
-                        self.logger.record("eval/kp_trans_x_avg", info["eval/kp_trans_x_avg"])
-                        self.logger.record("eval/kp_trans_y_avg", info["eval/kp_trans_y_avg"])
-                        self.logger.record("eval/kp_trans_z_avg", info["eval/kp_trans_z_avg"])
-                        self.logger.record("eval/kp_rot_x_avg", info["eval/kp_rot_x_avg"])
-                        self.logger.record("eval/kp_rot_y_avg", info["eval/kp_rot_y_avg"])
-                        self.logger.record("eval/kp_rot_z_avg", info["eval/kp_rot_z_avg"])
-                        
-                        self.logger.record("time/total_timesteps", self.num_timesteps)
                     
                     # Log New Physics Metrics (from our wrapper)
                     if "physics/avg_stiffness" in info:
