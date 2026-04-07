@@ -155,20 +155,23 @@ def main():
     print(f"🚀 Starting training for {args.env} with SEED: {args.seed}")
 
     env_name = args.env
-    run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}_SEED_{args.seed}'
+    # Not including seed in the run name so that we can group different seeds together in WandB UI.
+    # The seed is logged as a config parameter instead.
+    wandb_run_name = f'{args.algorithm}_{env_name.upper()}_{args.run_name}' 
+    run_name = f'{wandb_run_name}_SEED_{args.seed}'
 
     wandb.init(
-        project="HiRes-VIC",          # Name of your project dashboard
-        name=run_name,                # Name of this specific run
-        sync_tensorboard=True,        # MAGIC: Automatically uploads SB3 & Custom metrics!
-        monitor_gym=True,             # Auto-logs video if your env produces them
-        save_code=True,               # Saves your train.py so you know what code you ran
+        project="HiRes-VIC",
+        name=wandb_run_name,
+        sync_tensorboard=True,
+        monitor_gym=True,
+        save_code=True,
         config={
             "algorithm": args.algorithm,
             "env": args.env,
             "total_timesteps": args.total_timesteps,
             "n_envs": args.n_envs,
-            "is_vic": true,
+            "is_vic": True,
             "use_spd": args.use_spd,
             "use_lie": args.use_lie,
             "use_diag": args.use_diag,

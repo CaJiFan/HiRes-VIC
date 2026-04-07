@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Define a function to run training so we don't repeat code
-TASK="TiltedWipe"
 run_train() {
     ENV_NAME=$1
     ALGO=$2
@@ -12,8 +11,7 @@ run_train() {
     STIFF_PENALTY=$7
     EXP_NAME=$8
     SEED=$9
-    KP_MIN=1
-    KP_MAX=300
+    
 
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -52,13 +50,17 @@ run_train() {
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
+TASK="TiltedWipe"
 STIFF_PENALTY=0.005
-for NUM_MARKERS in 15 25  
+KP_MIN=1
+KP_MAX=300
+
+for NUM_MARKERS in 10 5  
 do
     for SEED in 3 2 1 0 
     do
-        run_train $TASK "SAC" 3_500_000 "TRUE" "TRUE" $NUM_MARKERS $STIFF_PENALTY "FULL_GRL_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}_KP${KP_MIN}_${KP_MAX}" $SEED
-        run_train $TASK "SAC" 3_500_000 "TRUE" "FALSE" $NUM_MARKERS $STIFF_PENALTY "SPD_ONLY_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}_KP${KP_MIN}_${KP_MAX}" $SEED
+        run_train $TASK "SAC" 3_500_000 "FALSE" "TRUE" $NUM_MARKERS $STIFF_PENALTY "FULL_GRL_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}_KP${KP_MIN}_${KP_MAX}" $SEED
+        run_train $TASK "SAC" 3_500_000 "FALSE" "FALSE" $NUM_MARKERS $STIFF_PENALTY "SPD_ONLY_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}_KP${KP_MIN}_${KP_MAX}" $SEED
         run_train $TASK "SAC" 3_500_000 "FALSE" "TRUE" $NUM_MARKERS $STIFF_PENALTY "LIE_ONLY_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}_KP${KP_MIN}_${KP_MAX}" $SEED 
         run_train $TASK "SAC" 3_500_000 "FALSE" "FALSE" $NUM_MARKERS $STIFF_PENALTY "BASELINE_C0_NM${NUM_MARKERS}_SP${STIFF_PENALTY}_KP${KP_MIN}_${KP_MAX}" $SEED
     done

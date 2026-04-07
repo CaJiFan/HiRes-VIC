@@ -28,7 +28,8 @@ class RobosuiteGymnasiumWrapper(gym.Env):
 
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
-        print(f"🔧 Robosuite Wrapper Initialized | SPD: {self.use_spd_manifold} | Lie Group: {self.use_lie_group}")
+        self.use_diag_manifold = use_diag_manifold
+        print(f"🔧 Robosuite Wrapper Initialized | SPD: {self.use_spd_manifold} | Lie Group: {self.use_lie_group} | Diag Manifold: {self.use_diag_manifold}")
 
         if task_kwargs is None:
             task_kwargs = {}
@@ -380,6 +381,15 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
 
                 # 2. Send the plots AND the exact numerical averages to WandB!
                 print('total markers', total_markers, 'wiped markers', wiped_markers, '%', percent_wiped )
+
+                # info["eval/kp_trans_x_avg"] =  eval_kp_avgs[0]
+                # info["eval/kp_trans_y_avg"] =  eval_kp_avgs[1]
+                # info["eval/kp_trans_z_avg"] =  eval_kp_avgs[2]
+                # info["eval/kp_rot_x_avg"] =  eval_kp_avgs[3]
+                # info["eval/kp_rot_y_avg"] =  eval_kp_avgs[4]
+                # info["eval/kp_rot_z_avg"] =  eval_kp_avgs[5]
+                # info["eval/raw_wipe_percentage"] =  percent_wiped
+                
                 wandb.log({
                     "eval/kp_trans_x_avg": eval_kp_avgs[0],
                     "eval/kp_trans_y_avg": eval_kp_avgs[1],
