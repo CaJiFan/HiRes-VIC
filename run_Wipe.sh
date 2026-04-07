@@ -11,7 +11,10 @@ run_train() {
     STIFF_PENALTY=$7
     EXP_NAME=$8
     SEED=$9
+<<<<<<< HEAD
     
+=======
+>>>>>>> 3047f2f14cac3b6e64c2b6034d43fedec7ac3ad7
 
     echo "=================================================="
     echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
@@ -53,9 +56,15 @@ mkdir -p logs
 TASK="TiltedWipe"
 STIFF_PENALTY=0.005
 KP_MIN=1
+<<<<<<< HEAD
 KP_MAX=300
 
 for NUM_MARKERS in 10 5  
+=======
+KP_MAX=1000
+
+for NUM_MARKERS in 10 5
+>>>>>>> 3047f2f14cac3b6e64c2b6034d43fedec7ac3ad7
 do
     for SEED in 3 2 1 0 
     do

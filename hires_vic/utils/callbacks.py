@@ -12,7 +12,6 @@ class RobosuiteLoggingCallback(BaseCallback):
             for idx, done in enumerate(dones):
                 if done:  # Only log when the episode finishes
                     info = infos[idx]
-                    
                     # Log Standard Metrics (if available)
                     if "success" in info:
                         self.logger.record("rollout/success_rate", float(info["success"]))

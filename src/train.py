@@ -7,10 +7,8 @@ from wandb.integration.sb3 import WandbCallback
 
 import torch
 import numpy as np
-from copy import deepcopy
 
 from robosuite import load_composite_controller_config
-import robosuite.controllers.parts.controller_factory as factory
 
 from stable_baselines3 import PPO, SAC, TD3
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, DummyVecEnv
@@ -19,10 +17,11 @@ from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 from sb3_contrib import TQC, RecurrentPPO
 
-from hires_vic.envs.riemannian_controller import RiemannianController
 from hires_vic.utils.callbacks import RobosuiteLoggingCallback
 from hires_vic.envs.gymnasium_wrapper import RobosuiteGymnasiumWrapper, RobosuitePhysicsWrapper
 
+from hires_vic.envs.riemannian_controller import RiemannianController
+import robosuite.controllers.parts.controller_factory as factory
 factory.arm_controllers.OperationalSpaceController = RiemannianController
 
 def parse_args():
@@ -37,6 +36,7 @@ def parse_args():
     parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
     parser.add_argument("--use_diag", action="store_true", help="Enable Diagonal SPD Riemannian Manifold")
+    parser.add_argument("--use_fixed", action="store_true", help="Enable fixed stiffness (no VIC, but still learn the residual on top of the fixed controller)")
     parser.add_argument("--kp_max", type=float, default=300.0, help="Maximum stiffness limit (N/m)")
     parser.add_argument("--kp_min", type=float, default=0.0, help="Minimum stiffness limit (N/m)")
     parser.add_argument("--use_condensed_obj_obs", action="store_true", help="Enable condensed object observation representation")
@@ -54,7 +54,6 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         # is_vic = "VIC" in run_name
         env_name = args.env
         is_vic = True
-        # kp_limits = [1, 1000] #[20, 200]
         kp_limits = [args.kp_min, args.kp_max]
 
         if is_vic:
@@ -70,11 +69,19 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             # "variable_kp": Agent outputs [Pos, Ori, Kp]. Damping (Kd) is auto-calculated.
             # "variable":  Agent outputs [Pos, Ori, Kp, Kd]. Both are learned.
             # "fixed": Agent outputs [Pos, Ori]. Kp is constant.
-            arm_config["impedance_mode"] = "riemannian_kp" if args.use_spd else "variable_kp"
+            if args.use_spd:
+                impedance_mode = "riemannian_kp"
+                arm_config["kp_limits"] = kp_limits 
+                arm_config["damping_ratio_limits"] = [1.0, 1.0] 
+            elif args.use_fixed:
+                impedance_mode = "fixed"
+            else:   
+                impedance_mode = "variable_kp"
+                arm_config["kp_limits"] = kp_limits 
+                arm_config["damping_ratio_limits"] = [1.0, 1.0] 
+
+            arm_config["impedance_mode"] = impedance_mode
             
-            # 0 = Completely limp (gravity comp only), 300 = Very stiff
-            arm_config["kp_limits"] = kp_limits 
-            arm_config["damping_ratio_limits"] = [1.0, 1.0] # Force critical damping
         
         task_kwargs = {
             "has_renderer": False,
@@ -161,19 +168,11 @@ def main():
     run_name = f'{wandb_run_name}_SEED_{args.seed}'
 
     wandb.init(
-<<<<<<< HEAD
         project="HiRes-VIC",
-        name=wandb_run_name,
-        sync_tensorboard=True,
-        monitor_gym=True,
-        save_code=True,
-=======
-        project="HiRes-VIC",          
         name=wandb_run_name,                
         sync_tensorboard=True,        
         monitor_gym=True,             
         save_code=True,              
->>>>>>> 3047f2f14cac3b6e64c2b6034d43fedec7ac3ad7
         config={
             "algorithm": args.algorithm,
             "env": args.env,
@@ -339,13 +338,6 @@ def main():
         deterministic=True,
         render=False
     )
-    # checkpoint_callback = CheckpointCallback(
-    #     save_freq=1_000_000, 
-    #     save_path=f"./outputs/checkpoints/{run_name}",
-    #     name_prefix="model",
-    #     save_replay_buffer=True,
-    #     save_vecnormalize=True
-    # )
 
     logging_callback = RobosuiteLoggingCallback()
 

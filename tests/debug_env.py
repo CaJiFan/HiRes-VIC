@@ -1,4 +1,5 @@
 import robosuite as suite
+from hires_vic import envs
 
 # Create a dummy environment
 env = suite.make("Door", robots="Panda", use_camera_obs=False)

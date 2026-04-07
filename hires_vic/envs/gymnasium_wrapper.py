@@ -19,6 +19,7 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         use_spd_manifold=False, 
         use_lie_group=False, 
         use_diag_manifold=False, 
+        use_fixed=False,
         controller_configs=None, 
         task_kwargs=None
     ):
@@ -29,7 +30,14 @@ class RobosuiteGymnasiumWrapper(gym.Env):
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
         self.use_diag_manifold = use_diag_manifold
-        print(f"🔧 Robosuite Wrapper Initialized | SPD: {self.use_spd_manifold} | Lie Group: {self.use_lie_group} | Diag Manifold: {self.use_diag_manifold}")
+        self.use_fixed = use_fixed
+        print(f"""
+            🔧 Robosuite Wrapper Initialized \
+            | SPD: {self.use_spd_manifold} \
+            | Lie Group: {self.use_lie_group} \
+            | Diag Manifold: {self.use_diag_manifold} \
+            | Fixed: {self.use_fixed}
+        """)
 
         if task_kwargs is None:
             task_kwargs = {}
@@ -187,12 +195,6 @@ class RobosuiteGymnasiumWrapper(gym.Env):
 
         raw_success = self.env._check_success()
         info["is_success"] = bool(raw_success)
-
-        # total_markers = self.env.num_markers
-        # wiped_markers = len(self.env.wiped_markers)
-        # percent_wiped = wiped_markers / total_markers
-        
-        # info["is_success"] = percent_wiped
         
         flat_obs = self._flatten_obs(obs_dict)
         terminated = done
@@ -271,10 +273,8 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         robot = robosuite_env.robots[0]
 
         min_kp, max_kp = gymwrapper_env.min_kp, gymwrapper_env.max_kp
-        # print('KP LIMITS!!')
-        # print(min_kp, max_kp)
     
-        # Get Contact Forces
+        # # Get Contact Forces
         try:
             ee_force = max([
                 np.linalg.norm(np.array(robot.recent_ee_forcetorques[arm].current[:3]))
@@ -333,10 +333,10 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         #     reward -= force_penalty_val 
 
         # Stiffness Penalty (Energy Efficiency)
-        stiffness_penalty_val = 0.0
-        if self.stiffness_penalty > 0:
-            stiffness_penalty_val = self.stiffness_penalty * (stiffness_percentage**2)
-            reward -= stiffness_penalty_val
+        # stiffness_penalty_val = 0.0
+        # if self.stiffness_penalty > 0:
+        #     stiffness_penalty_val = self.stiffness_penalty * (stiffness_percentage**2)
+        #     reward -= stiffness_penalty_val
 
         # LOGGING 
         self.episode_stiffness_sum += physical_stiffness
@@ -348,26 +348,8 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
         self.ep_kp_rot_y += physical_kp_vals[4]
         self.ep_kp_rot_z += physical_kp_vals[5]
 
-        # # Log instantaneous metrics (for debugging spikes)
-        # info["physics/stiffness_step"] = physical_stiffness
-        # info["physics/force_step"] = ee_force
-        # # info["reward/force_penalty"] = force_penalty_val
-        # info["reward/stiffness_penalty"] = stiffness_penalty_val
-        # info["safety/joint_violation"] = is_unsafe
-
-        # info["physics/kp_trans_x"] = self.ep_kp_trans_x
-        # info["physics/kp_trans_y"] = self.ep_kp_trans_y
-        # info["physics/kp_trans_z"] = self.ep_kp_trans_z
-        # info["physics/kp_rot_x"] = self.ep_kp_rot_x
-        # info["physics/kp_rot_y"] = self.ep_kp_rot_y
-        # info["physics/kp_rot_z"] = self.ep_kp_rot_z
-
-
         # Log Episode Averages (Only when episode ends)
         if terminated or truncated:
-            # avg_stiffness = self.episode_stiffness_sum / max(1, self.episode_steps)
-            # info["physics/avg_stiffness"] = avg_stiffness
-
             total_markers = robosuite_env.num_markers
             wiped_markers = len(robosuite_env.wiped_markers)
             percent_wiped = wiped_markers / total_markers
@@ -382,14 +364,6 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
                 # 2. Send the plots AND the exact numerical averages to WandB!
                 print('total markers', total_markers, 'wiped markers', wiped_markers, '%', percent_wiped )
 
-                # info["eval/kp_trans_x_avg"] =  eval_kp_avgs[0]
-                # info["eval/kp_trans_y_avg"] =  eval_kp_avgs[1]
-                # info["eval/kp_trans_z_avg"] =  eval_kp_avgs[2]
-                # info["eval/kp_rot_x_avg"] =  eval_kp_avgs[3]
-                # info["eval/kp_rot_y_avg"] =  eval_kp_avgs[4]
-                # info["eval/kp_rot_z_avg"] =  eval_kp_avgs[5]
-                # info["eval/raw_wipe_percentage"] =  percent_wiped
-                
                 wandb.log({
                     "eval/kp_trans_x_avg": eval_kp_avgs[0],
                     "eval/kp_trans_y_avg": eval_kp_avgs[1],
@@ -399,56 +373,10 @@ class RobosuitePhysicsWrapper(gym.Wrapper):
                     "eval/kp_rot_z_avg": eval_kp_avgs[5],
                     "eval/raw_wipe_percentage": percent_wiped
                 })
-                
-            #     # --- Figure 1: Translational Stiffness ---
-            #     fig_trans, ax_trans = plt.subplots(figsize=(10, 6), dpi=150)
-            #     ax_trans.plot(history_array[:, 0], label="Kp_trans_X")
-            #     ax_trans.plot(history_array[:, 1], label="Kp_trans_Y")
-            #     ax_trans.plot(history_array[:, 2], label="Kp_trans_Z", linewidth=2, linestyle='--')
-            #     ax_trans.set_title("Translational Impedance Profile")
-            #     ax_trans.set_xlabel("Timesteps")
-            #     ax_trans.set_ylabel("Stiffness (N/m)")
-                
-            #     # Dynamic Y-Limits based on Robosuite's physical limits!
-            #     # We add a 5% margin so the lines don't touch the literal top/bottom of the chart
-            #     trans_margin = (max_kp - min_kp) * 0.05
-            #     ax_trans.set_ylim(min_kp - trans_margin, max_kp + trans_margin) 
-                
-            #     ax_trans.legend(loc="upper right")
-            #     ax_trans.grid(True)
-            #     fig_trans.tight_layout()
-
-            #     # --- Figure 2: Rotational Stiffness ---
-            #     fig_rot, ax_rot = plt.subplots(figsize=(10, 6), dpi=150)
-            #     ax_rot.plot(history_array[:, 3], label="Kp_rot_X")
-            #     ax_rot.plot(history_array[:, 4], label="Kp_rot_Y")
-            #     ax_rot.plot(history_array[:, 5], label="Kp_rot_Z", linewidth=2, linestyle='--')
-            #     ax_rot.set_title("Rotational Impedance Profile")
-            #     ax_rot.set_xlabel("Timesteps")
-            #     ax_rot.set_ylabel("Stiffness (Nm/rad)")
-                
-            #     # Dynamic Y-Limits for rotation
-            #     rot_margin = (max_kp - min_kp) * 0.05
-            #     ax_rot.set_ylim(min_kp - rot_margin, max_kp + rot_margin) 
-                
-            #     ax_rot.legend(loc="upper right")
-            #     ax_rot.grid(True)
-            #     fig_rot.tight_layout()
-
-            #     # Send both plots directly to WandB as separate panels
-            #     wandb.log({
-            #         "eval/kp_trans_profile": wandb.Image(fig_trans),
-            #         "eval/kp_rot_profile": wandb.Image(fig_rot)
-            #     })
-                
-            #     # Close both figures to prevent memory leaks!
-            #     plt.close(fig_trans)
-            #     plt.close(fig_rot)
-
 
             avg_force = self.episode_force_sum / max(1, self.episode_steps)
             
-            info["physics/max_force_violation_count"] = self.violation_count
+            info["physics/joint_violation_count"] = self.violation_count
             info["physics/kp_trans_x_avg"] = self.ep_kp_trans_x / max(1, self.episode_steps)
             info["physics/kp_trans_y_avg"] = self.ep_kp_trans_y / max(1, self.episode_steps)
             info["physics/kp_trans_z_avg"] = self.ep_kp_trans_z / max(1, self.episode_steps)
