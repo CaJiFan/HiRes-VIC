@@ -56,6 +56,10 @@ run_train() {
         ARGS+=(--use_spd)
     fi
 
+    if [ "$USE_SPD" == "FIXED" ]; then
+        ARGS+=(--use_fixed)
+    fi
+
     if [ "$USE_LG" == "TRUE" ]; then
         ARGS+=(--use_lie)
     fi
@@ -69,7 +73,7 @@ run_train() {
 # --- A helper function to enforce the 8-job limit ---
 wait_for_queue() {
     # Check how many background processes this script currently owns
-    while [ $(jobs -p | wc -l) -ge 6 ]; do
+    while [ $(jobs -p | wc -l) -ge 8 ]; do
         sleep 30  # Wait 30 seconds before checking again
     done
 }
@@ -79,8 +83,8 @@ TASK="TiltedWipe"
 NUM_MARKERS=5
 
 
-for SEED in 3 2
-do
+for SEED in 0 1 2 3 4
+do    
     run_train $TASK "TRUE" "TRUE" $NUM_MARKERS "FULL_GRL_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
     wait_for_queue
 
