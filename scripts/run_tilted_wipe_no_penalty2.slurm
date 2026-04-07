@@ -1,9 +1,9 @@
 #!/bin/bash
 #
 # --- Slurm Configuration ---
-#SBATCH --job-name=Tilted_ShortHorizon2
-#SBATCH --output=logs/tilted_short_horizon2_%j.txt
-#SBATCH --error=logs/tilted_short_horizon2_%j.err 
+#SBATCH --job-name=Tilted_ShortHorizon
+#SBATCH --output=logs/tilted_short_horizon_%j.txt
+#SBATCH --error=logs/tilted_short_horizon_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48                    # 48 CPUs total (6 concurrent runs * 8 cores = 48)
@@ -56,6 +56,10 @@ run_train() {
         ARGS+=(--use_spd)
     fi
 
+    if [ "$USE_SPD" == "FIXED" ]; then
+        ARGS+=(--use_fixed)
+    fi
+
     if [ "$USE_LG" == "TRUE" ]; then
         ARGS+=(--use_lie)
     fi
@@ -78,8 +82,9 @@ wait_for_queue() {
 TASK="TiltedWipe"
 NUM_MARKERS=5
 
-for SEED in 3 2 1 0 4
-do
+
+for SEED in 2 3
+do    
     run_train $TASK "TRUE" "TRUE" $NUM_MARKERS "FULL_GRL_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
     wait_for_queue
 

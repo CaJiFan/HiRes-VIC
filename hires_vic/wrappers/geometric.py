@@ -15,6 +15,7 @@ class GeometricWrapper(gym.Wrapper):
         use_spd_manifold=False, 
         use_lie_group=False, 
         use_diag_manifold=False, 
+        use_fixed=False,
         is_eval=False, 
         stiffness_penalty=0.0, 
         force_penalty=0.0, 
@@ -25,6 +26,7 @@ class GeometricWrapper(gym.Wrapper):
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
         self.use_diag_manifold = use_diag_manifold
+        self.use_fixed = use_fixed
         self.stiffness_penalty = stiffness_penalty
         self.force_penalty = force_penalty
         self.terminate_on_unsafe = terminate_on_unsafe
@@ -54,10 +56,10 @@ class GeometricWrapper(gym.Wrapper):
             | Diag Manifold: {self.use_diag_manifold}
         """)
 
-        action_dim = 9 # rot kp + pos + ori
+        action_dim = 3 if self.use_fixed else 6
         action_dim += 6 if self.use_spd_manifold else 3
         
-        gripper_dim = self.env.action_dim - (18 if self.use_spd_manifold else 12)
+        gripper_dim = self.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
         if gripper_dim > 0:
             action_dim += gripper_dim
 

@@ -124,6 +124,7 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             use_spd_manifold=args.use_spd,
             use_lie_group=args.use_lie,
             use_diag_manifold=args.use_diag,
+            use_fixed=args.use_fixed,
             is_eval=is_eval
         )
 

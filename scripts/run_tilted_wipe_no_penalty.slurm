@@ -83,7 +83,7 @@ TASK="TiltedWipe"
 NUM_MARKERS=5
 
 
-for SEED in 0 1 2 3 4
+for SEED in 0 1 
 do    
     run_train $TASK "TRUE" "TRUE" $NUM_MARKERS "FULL_GRL_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
     wait_for_queue
