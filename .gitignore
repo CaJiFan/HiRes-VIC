@@ -86,3 +86,5 @@ mjkey.txt
 # Generated assets or cache
 assets/downloaded/
 *.mjb
+
+third_party/*
