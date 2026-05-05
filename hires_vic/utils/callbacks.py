@@ -7,6 +7,12 @@ class RobosuiteLoggingCallback(BaseCallback):
     def _on_step(self) -> bool:
         dones = self.locals.get("dones")
         infos = self.locals.get("infos")
+
+        if infos is not None:
+            for idx, info in enumerate(infos):
+                # Log LLM mode at every step
+                if "llm/impedance_mode" in info:
+                    self.logger.record("llm/impedance_mode", info["llm/impedance_mode"])
         
         if dones is not None and infos is not None:
             for idx, done in enumerate(dones):
@@ -36,6 +42,8 @@ class RobosuiteLoggingCallback(BaseCallback):
                         self.logger.record("physics/raw_wipe_percentage", info["physics/raw_wipe_percentage"])
                     if "physics/max_force_violation_count" in info:
                         self.logger.record("safety/max_force_violations", info["physics/max_force_violation_count"])
+                    if "physics/joint_violation_count" in info:
+                        self.logger.record("safety/joint_violations", info["physics/joint_violation_count"])
                     if "physics/kp_trans_x_avg" in info:
                         self.logger.record("physics/kp_trans_x_avg", info["physics/kp_trans_x_avg"])
                     if "physics/kp_trans_y_avg" in info:

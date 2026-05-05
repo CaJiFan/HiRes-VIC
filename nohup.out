@@ -31,3 +31,37 @@ Allocated GPU:
 Starting SAC on TiltedWipe for  steps...
 Date: mar 07 abr 2026 17:22:15 CEST
 ==================================================
+==========================================================
+Starting Packed Slurm Job with Rolling Queue (Max 8)
+Running on node: cerber
+Allocated GPU: 
+==========================================================
+All experiments queued. Waiting for the final batch to finish...
+==================================================
+Starting SAC on TiltedWipe for  steps...
+Date: mié 08 abr 2026 00:40:24 CEST
+==================================================
+Finished SAC on FIXED_C1_NM5_KP1_300
+✅ All Door experiments completed successfully!
+==========================================================
+Starting Packed Slurm Job with Rolling Queue (Max 8)
+Running on node: cerber
+Allocated GPU: 
+==========================================================
+All experiments queued. Waiting for the final batch to finish...
+==================================================
+Starting SAC on TiltedWipe for  steps...
+Date: mié 08 abr 2026 00:49:02 CEST
+==================================================
+Finished SAC on FIXED_C1_NM5_KP1_300
+✅ All Door experiments completed successfully!
+==========================================================
+Starting Packed Slurm Job with Rolling Queue (Max 8)
+Running on node: cerber
+Allocated GPU: 
+==========================================================
+All experiments queued. Waiting for the final batch to finish...
+==================================================
+Starting SAC on TiltedWipe for  steps...
+Date: mié 08 abr 2026 00:49:43 CEST
+==================================================

@@ -15,6 +15,7 @@ class GeometricWrapper(gym.Wrapper):
         use_spd_manifold=False, 
         use_lie_group=False, 
         use_diag_manifold=False, 
+        use_fixed=False,
         is_eval=False, 
         stiffness_penalty=0.0, 
         force_penalty=0.0, 
@@ -25,6 +26,7 @@ class GeometricWrapper(gym.Wrapper):
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
         self.use_diag_manifold = use_diag_manifold
+        self.use_fixed = use_fixed
         self.stiffness_penalty = stiffness_penalty
         self.force_penalty = force_penalty
         self.terminate_on_unsafe = terminate_on_unsafe
@@ -47,6 +49,15 @@ class GeometricWrapper(gym.Wrapper):
 
         self.min_kp, self.max_kp  = (1, 300)
 
+        self.use_llm_prior = kwargs.get("use_llm_prior", False)
+        self.llm_planner = None
+        if self.use_llm_prior:
+            from hires_vic.llm.impedance_planner import LLMImpedancePlanner
+            self.llm_planner = LLMImpedancePlanner(
+                query_every_n_steps=kwargs.get("llm_query_interval", 50),
+                prior_weight=kwargs.get("llm_prior_weight", 0.4),
+            )
+
         print(f"""
             🔧 Robosuite Wrapper Initialized \
             | SPD: {self.use_spd_manifold} \
@@ -54,10 +65,10 @@ class GeometricWrapper(gym.Wrapper):
             | Diag Manifold: {self.use_diag_manifold}
         """)
 
-        action_dim = 9 # rot kp + pos + ori
+        action_dim = 3 if self.use_fixed else 6
         action_dim += 6 if self.use_spd_manifold else 3
         
-        gripper_dim = self.env.action_dim - (18 if self.use_spd_manifold else 12)
+        gripper_dim = self.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
         if gripper_dim > 0:
             action_dim += gripper_dim
 
@@ -118,6 +129,9 @@ class GeometricWrapper(gym.Wrapper):
             
         obs = self.env.reset()
         flat_obs = self._flatten_obs(obs)
+
+        if self.llm_planner is not None:
+            self.llm_planner.reset()
         
         self.episode_force_sum = 0.0
         self.episode_steps = 0
@@ -135,6 +149,18 @@ class GeometricWrapper(gym.Wrapper):
         return flat_obs, {}
 
     def step(self, action):
+        if self.llm_planner is not None:
+            suggestion = self.llm_planner.query(self._last_obs_dict)
+            # Blend RL action with LLM prior in log-space (for SPD manifold part)
+            # action[:6] = Mandel log-space params (if use_spd_manifold)
+            w = suggestion.confidence
+            action = action.copy()
+            action[:6] = (1 - w) * action[:6] + w * suggestion.log_kp_prior
+            action[6:9] = (1 - w) * action[6:9] + w * suggestion.kp_rot_prior
+            # Log mode for analysis
+            self._current_llm_mode = suggestion.mode
+
+        
         if self.use_spd_manifold:
             mandel_params = action[:6].copy()
 
@@ -153,6 +179,7 @@ class GeometricWrapper(gym.Wrapper):
                 kp_rot_scaled,          # Scaled rotational stiffness
                 action[9:],             # pos + ori + gripper
             ])
+            physical_kp_vals = np.concatenate([np.diag(kp_matrix), kp_rot_scaled])
 
         elif self.use_diag_manifold:
             kp_raw = action[:6].copy()
@@ -168,11 +195,13 @@ class GeometricWrapper(gym.Wrapper):
                 kp_scaled,      # 6 elements (Trans + Rot Kp)
                 action[6:],     # The rest of the action space (pos, ori, gripper)
             ])
+            physical_kp_vals = kp_scaled
             
         else:
             # Standard baseline execution
             low, high = self.env.action_space.low, self.env.action_space.high
             robosuite_action = low + 0.5 * (action + 1.0) * (high - low)
+            physical_kp_vals = robosuite_action[:6]
 
         obs, reward, terminated, truncated, info = self.env.step(robosuite_action)
         self.episode_steps += 1
@@ -194,28 +223,8 @@ class GeometricWrapper(gym.Wrapper):
         except Exception as e:
             ee_force = 0.0
 
-        
-        try:
-            if self.use_spd_manifold: 
-                kp_vals = np.concatenate([np.diag(kp_matrix), action[6:9]])
-            else: 
-                # Layout: Kp(6), pos(3), ori(3), gripper(1)
-                kp_vals = robosuite_action[0:6]
 
-            # low, high = self.env.action_space.low, self.env.action_space.high
-            kp_vals_percentage = (kp_vals + 1.0) / 2.0
-            physical_kp_vals = self.min_kp + (kp_vals_percentage * (self.max_kp - self.min_kp))     
-                
-            # stiffness_percentage = np.mean((kp_vals + 1.0) / 2.0)
-            # physical_stiffness = self.min_kp + (stiffness_percentage * (self.max_kp - self.min_kp))
-
-            if self.is_eval:
-                self.kp_history.append(physical_kp_vals.copy())
-       
-        except Exception as e:
-            print(f"Error extracting stiffness from action: {e}")
-
-        # 3. Check Safety (Joint Limits)
+        # Check Safety (Joint Limits)
         try:
             if robot.check_q_limits():
                 self.violation_count += 1
@@ -223,6 +232,9 @@ class GeometricWrapper(gym.Wrapper):
         except AttributeError:
             # Failsafe just in case
             pass
+
+        if self.is_eval:
+            self.kp_history.append(physical_kp_vals.copy())
 
         # LOGGING 
         self.episode_force_sum += ee_force

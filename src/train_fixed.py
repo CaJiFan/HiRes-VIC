@@ -71,13 +71,14 @@ def parse_args():
     # Environment Args
     parser.add_argument("--env", type=str, default="TiltedWipe", help="Robosuite environment name")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
-    parser.add_argument("--total_timesteps", type=int, default=3_500_000, help="Total training steps")
+    parser.add_argument("--total_timesteps", type=int, default=4_000_000, help="Total training steps")
     parser.add_argument("--num_markers", type=int, default=5, help="Number of dirt markers for Wipe task")
     parser.add_argument("--n_envs", type=int, default=8, help="Number of parallel environments")
     parser.add_argument("--algorithm", type=str, default="SAC", help="Algorithm name for logging")
     parser.add_argument("--use_spd", action="store_true", help="Enable Riemannian SPD stiffness")
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
     parser.add_argument("--use_diag", action="store_true", help="Enable Diagonal SPD Riemannian Manifold")
+    parser.add_argument("--use_fixed", action="store_true", help="Enable fixed stiffness (no VIC, but still learn the residual on top of the fixed controller)")
     
     # Logging Args
     parser.add_argument("--run_name", type=str, required=True, help="Name of the run for logging/saving")
@@ -95,11 +96,13 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         
         arm_config = controller_config["body_parts"]["right"]
         arm_config["type"] = "OSC_POSE"
-        arm_config["impedance_mode"] = "riemannian_kp" if args.use_spd else "variable_kp"  # "fixed" or "variable_kp"
-        arm_config["kp_limits"] = [1, 300] 
+        arm_config["impedance_mode"] = "riemannian_kp" if args.use_spd else "fixed" if args.use_fixed else "variable_kp"
+        arm_config["kp_limits"] = [1, 300] # default 
+        arm_config["damping_ratio_limits"] = [1.0, 1.0] 
 
         WIPE_TASK_CONFIG["num_markers"] = args.num_markers
         WIPE_TASK_CONFIG["use_condensed_obj_obs"] = True
+
         
         env = suite.make(
             env_name=args.env,
@@ -121,6 +124,7 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             use_spd_manifold=args.use_spd,
             use_lie_group=args.use_lie,
             use_diag_manifold=args.use_diag,
+            use_fixed=args.use_fixed,
             is_eval=is_eval
         )
 

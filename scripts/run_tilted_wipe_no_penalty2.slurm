@@ -69,7 +69,7 @@ run_train() {
 # --- A helper function to enforce the 8-job limit ---
 wait_for_queue() {
     # Check how many background processes this script currently owns
-    while [ $(jobs -p | wc -l) -ge 6 ]; do
+    while [ $(jobs -p | wc -l) -ge 8 ]; do
         sleep 30  # Wait 30 seconds before checking again
     done
 }
@@ -78,7 +78,7 @@ wait_for_queue() {
 TASK="TiltedWipe"
 NUM_MARKERS=5
 
-for SEED in 1 0 
+for SEED in 3 2 1 0 4
 do
     run_train $TASK "TRUE" "TRUE" $NUM_MARKERS "FULL_GRL_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
     wait_for_queue

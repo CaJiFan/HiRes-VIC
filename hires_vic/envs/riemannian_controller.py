@@ -34,7 +34,7 @@ class RiemannianController(OperationalSpaceController):
             self.kp_pos_matrix = kp_pos_flat.reshape((3, 3))
             kp_sym = (self.kp_pos_matrix + self.kp_pos_matrix.T) / 2.0
             eigenvalues, eigenvectors = np.linalg.eigh(kp_sym)
-            eigenvalues = np.maximum(eigenvalues, 0.0)
+            eigenvalues = np.maximum(eigenvalues, 1.0)
             self.kd_pos_matrix = eigenvectors @ np.diag(2.0 * np.sqrt(eigenvalues)) @ eigenvectors.T
             
             # 3. Rotational Array Math
