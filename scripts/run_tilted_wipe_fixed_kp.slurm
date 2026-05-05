@@ -48,6 +48,7 @@ run_train() {
         --env "$ENV_NAME"
         --run_name "$EXP_NAME"
         --num_markers "$NUM_MARKERS"
+        --fixed_kp "$FIXED_KP"
         --seed "$SEED"
     )
 
@@ -73,7 +74,7 @@ run_train() {
 # --- A helper function to enforce the 8-job limit ---
 wait_for_queue() {
     # Check how many background processes this script currently owns
-    while [ $(jobs -p | wc -l) -ge 8 ]; do
+    while [ $(jobs -p | wc -l) -ge 6 ]; do
         sleep 30  # Wait 30 seconds before checking again
     done
 }
@@ -81,21 +82,24 @@ wait_for_queue() {
 # --- Define the Shared Parameters ---
 TASK="TiltedWipe"
 NUM_MARKERS=5
+GAMMA=0.90
 
+for FIXED_KP in 150 300 500
+do
+    for SEED in 3 2
+    do    
+        run_train $TASK "FIXED" "" $NUM_MARKERS "FOS_FIXED_C1_NM${NUM_MARKERS}_KP${FIXED_KP}_GAMMA${GAMMA}" $SEED &
+        wait_for_queue
 
-for SEED in 3 2
-do    
-    run_train $TASK "TRUE" "TRUE" $NUM_MARKERS "FOS_FULL_GRL_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    wait_for_queue
+        # run_train $TASK "TRUE" "FALSE" $NUM_MARKERS "FOS_SPD_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+        # wait_for_queue
 
-    run_train $TASK "TRUE" "FALSE" $NUM_MARKERS "FOS_SPD_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    wait_for_queue
+        # run_train $TASK "FALSE" "TRUE" $NUM_MARKERS "FOS_LIE_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+        # wait_for_queue
 
-    run_train $TASK "FALSE" "TRUE" $NUM_MARKERS "FOS_LIE_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    wait_for_queue
-
-    run_train $TASK "FALSE" "FALSE" $NUM_MARKERS "FOS_BASELINE_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    wait_for_queue
+        # run_train $TASK "FALSE" "FALSE" $NUM_MARKERS "FOS_BASELINE_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+        # wait_for_queue
+    done
 done
 
 # After all 16 jobs have been pushed through the queue, wait for the final batch of up to 8 to finish.

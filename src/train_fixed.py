@@ -1,3 +1,4 @@
+from html import parser
 import os 
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -71,7 +72,7 @@ def parse_args():
     # Environment Args
     parser.add_argument("--env", type=str, default="TiltedWipe", help="Robosuite environment name")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
-    parser.add_argument("--total_timesteps", type=int, default=4_000_000, help="Total training steps")
+    parser.add_argument("--total_timesteps", type=int, default=1_000_000, help="Total training steps")
     parser.add_argument("--num_markers", type=int, default=5, help="Number of dirt markers for Wipe task")
     parser.add_argument("--n_envs", type=int, default=8, help="Number of parallel environments")
     parser.add_argument("--algorithm", type=str, default="SAC", help="Algorithm name for logging")
@@ -79,6 +80,11 @@ def parse_args():
     parser.add_argument("--use_lie", action="store_true", help="Enable Lie Group orientation prior")
     parser.add_argument("--use_diag", action="store_true", help="Enable Diagonal SPD Riemannian Manifold")
     parser.add_argument("--use_fixed", action="store_true", help="Enable fixed stiffness (no VIC, but still learn the residual on top of the fixed controller)")
+    parser.add_argument("--fixed_kp", type=int, default=150, help="Fixed kp value")
+    parser.add_argument("--gamma", type=float, default=0.99, help="gamma parameter for SAC algorithm")
+    parser.add_argument("--use_llm_prior", action="store_true")
+    parser.add_argument("--llm_query_interval", type=int, default=50)
+    parser.add_argument("--llm_prior_weight", type=float, default=0.4)
     
     # Logging Args
     parser.add_argument("--run_name", type=str, required=True, help="Name of the run for logging/saving")
@@ -100,9 +106,12 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         arm_config["kp_limits"] = [1, 300] # default 
         arm_config["damping_ratio_limits"] = [1.0, 1.0] 
 
+        if args.use_fixed:
+            arm_config["kp"] = args.fixed_kp
+            print(f"Initializing controller with fixed kp of {args.fixed_kp}")
+
         WIPE_TASK_CONFIG["num_markers"] = args.num_markers
         WIPE_TASK_CONFIG["use_condensed_obj_obs"] = True
-
         
         env = suite.make(
             env_name=args.env,
@@ -157,7 +166,7 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Training on {device.upper()} with {args.n_envs} parallel environments.")
-    print(f"🚀 Starting training for {args.env} with SEED: {args.seed}")
+    print(f"🚀 Starting training for {args.env} with SEED: {args.seed} and gamma: {args.gamma}")
 
     wandb_run_name = f'{args.algorithm}_{args.env.upper()}_{args.run_name}' 
     run_name = f'{wandb_run_name}_SEED_{args.seed}'
@@ -182,11 +191,12 @@ def main():
         learning_rate=3e-4,
         batch_size=512,
         buffer_size=1_000_000,
-        tau=0.002,              # For soft updates of the target network
-        target_entropy="auto", # Encourage exploration (tune based on action space)
-        train_freq=1,        # Train every step
-        gradient_steps=args.n_envs,    # Take 4 gradient steps to match 4 new data points
-        use_sde=False,            # Smooth robotic noise
+        tau=0.002,                  # For soft updates of the target network
+        target_entropy="auto",      # Encourage exploration (tune based on action space)
+        gamma=args.gamma,           # default 0.99
+        train_freq=1,               # Train every step
+        gradient_steps=args.n_envs, # Take 4 gradient steps to match 4 new data points
+        use_sde=False,              # Smooth robotic noise
         # sde_sample_freq=8,
         seed=args.seed,
         device=device
@@ -209,6 +219,10 @@ def main():
         callback=[logging_callback, eval_callback, wandb_callback],
         reset_num_timesteps=False
     )
+
+    if hasattr(logging_callback, "episode_count"):
+        print(f"Total Episodes Completed: {env.episode_count}")
+        wandb.log({"train/episodes_completed": env.episode_count})
 
     # 7. Save final model and cleanup
     model.save(f"./outputs/models/{run_name}_final")
