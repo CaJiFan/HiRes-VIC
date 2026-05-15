@@ -1,6 +1,5 @@
 # Impedance profile for PegInsertionSide-v1 (ManiSkill)
-# Manually seeded with expert impedance intuition; run profile_generator.py
-# to regenerate / refine with an LLM.
+# Manually seeded with expert impedance intuition.
 #
 # Physical units:
 #   kp_trans: diagonal translational stiffness [Kx, Ky, Kz]  (N/m,     range 1–300)
@@ -14,30 +13,25 @@
 task: PegInsertionSide-v1
 robot: Panda
 description: >
-  Peg-in-hole insertion from the side. The peg is attached to the robot EEF.
-  Key challenges: lateral alignment precision, compliant insertion to avoid
-  jamming, and final seating to full depth.
+  Peg-in-hole insertion from the side. The episode begins with the peg ALREADY grasped 
+  and positioned near the hole opening. Key challenges: lateral alignment precision, 
+  compliant insertion to avoid jamming, and final seating to full depth.
 
 phases:
-  approach:
-    kp_trans: [40.0, 40.0, 40.0]
-    kp_rot:   [20.0, 20.0, 20.0]
-    description: "Free-space approach: uniform medium stiffness, robot moves freely"
-
   align:
     kp_trans: [80.0, 20.0, 80.0]
     kp_rot:   [30.0, 10.0, 30.0]
-    description: "Alignment: stiffen XZ for precise hole centering, compliant along insertion axis Y"
+    description: "Alignment: stiffen XZ for precise hole centering, compliant along insertion axis Y to feel the opening"
 
   insert:
     kp_trans: [25.0, 90.0, 25.0]
     kp_rot:   [15.0, 23.0, 15.0]
-    description: "Insertion: highly compliant XZ to absorb jamming, stiff along Y for depth progress"
+    description: "Insertion: highly compliant XZ to absorb jamming and wedging, stiff along Y for depth progress"
 
   seated:
     kp_trans: [50.0, 150.0, 50.0]
     kp_rot:   [25.0, 20.0, 25.0]
-    description: "Seating: very stiff along Y to press peg to full insertion depth"
+    description: "Seating: very stiff along Y to press peg to full insertion depth, moderate stiffness elsewhere"
 
 # System prompt injected into the runtime LLMImpedancePlanner for this task.
 planner_prompt: |
@@ -46,7 +40,10 @@ planner_prompt: |
   stiffness is a full 3×3 SPD matrix (on the Sym+(3) manifold) and orientation
   is controlled via SO(3) error.
 
-  The peg is mounted on the robot's end-effector. The hole is fixed in the world.
+  CRITICAL CONTEXT: A scripted curriculum has already moved the robot through free space. 
+  The episode begins with the peg ALREADY GRASPED and positioned right next to the hole. 
+  Your ONLY job is to guide the alignment and insertion using contact forces.
+
   The insertion axis is roughly along the robot's Y-axis in task space.
 
   At each query you receive: EEF position, peg head position relative to the hole,
@@ -54,9 +51,8 @@ planner_prompt: |
   impedance mode for the current phase.
 
   Available modes:
-    approach – free-space motion toward the hole, no contact
-    align    – peg tip near the hole opening, fine lateral positioning required
-    insert   – peg partially inserted, guiding along the insertion axis
-    seated   – peg nearly fully inserted, pressing to final depth
+    align    – peg tip near the hole opening, fine lateral positioning required to find the center
+    insert   – peg partially inserted, guiding along the insertion axis while remaining compliant to avoid jamming
+    seated   – peg nearly fully inserted, pressing firmly to final depth
 
   Respond with ONLY the mode name, nothing else.

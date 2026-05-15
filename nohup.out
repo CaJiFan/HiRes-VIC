@@ -171,3 +171,14 @@ Running Seed: 0 | Gamma: 0.90
 Running Seed: 0 | Gamma: 0.99
 ==========================================================
 -> Starting: baseline_llm0.2_g0.99_s0 | Logging to logs/pih/baseline_llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_curriculum_s0.log
+run_pih.sh: line 21: 290416 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_curriculum_s0.log

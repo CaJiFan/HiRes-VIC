@@ -48,6 +48,8 @@ from torch.distributions import Normal
 import gymnasium as gym
 import wandb
 
+from hires_vic.wrappers.pih_curriculum import InsertionCurriculumWrapper
+
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -311,6 +313,8 @@ def make_envs(args, is_eval=False):
         max_episode_steps=args.max_episode_steps,
         render_mode=None,
     )
+
+    env = InsertionCurriculumWrapper(env, setup_steps=90)
 
     # PiH task metrics: insertion depth from env info (populated by ManiSkill)
     def pih_task_metrics_fn(env, info):

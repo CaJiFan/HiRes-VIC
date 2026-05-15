@@ -205,7 +205,8 @@ class ManiSkillRiemannianWrapper(gym.Wrapper):
                 prior_weight=llm_prior_weight,
                 profile_path=llm_profile_path,
             )
-        self._current_llm_mode = "approach"
+        # self._current_llm_mode = "approach"
+        self._current_llm_mode = "align"
 
         print(
             f"ManiSkillRiemannianWrapper | SPD={use_spd} Diag={use_diag} "
