@@ -1,67 +1,173 @@
+
+══════════════════════════════════════════════
+ Run : SPD_baseline_g0.90
+ Args: 
+ Log : logs/sweep_llm/SPD_baseline_g0.90.log
+ Time: vie 08 may 2026 02:03:08 CEST
+══════════════════════════════════════════════
+
+▶ Starting main grid: prior_weight × query_interval
+
+══════════════════════════════════════════════
+ Run : SPD_LLM_w0.1_k20_g0.90
+ Args: --use_llm_prior --llm_backend ollama --llm_prior_weight 0.1 --llm_query_interval 20
+ Log : logs/sweep_llm/SPD_LLM_w0.1_k20_g0.90.log
+ Time: vie 08 may 2026 02:08:02 CEST
+══════════════════════════════════════════════
+✓ Done: SPD_LLM_w0.1_k20_g0.90
+
+══════════════════════════════════════════════
+ Run : SPD_LLM_w0.1_k50_g0.90
+ Args: --use_llm_prior --llm_backend ollama --llm_prior_weight 0.1 --llm_query_interval 50
+ Log : logs/sweep_llm/SPD_LLM_w0.1_k50_g0.90.log
+ Time: vie 08 may 2026 05:03:48 CEST
+══════════════════════════════════════════════
+✓ Done: SPD_LLM_w0.1_k50_g0.90
+
+══════════════════════════════════════════════
+ Run : SPD_LLM_w0.1_k100_g0.90
+ Args: --use_llm_prior --llm_backend ollama --llm_prior_weight 0.1 --llm_query_interval 100
+ Log : logs/sweep_llm/SPD_LLM_w0.1_k100_g0.90.log
+ Time: vie 08 may 2026 06:35:21 CEST
+══════════════════════════════════════════════
+✓ Done: SPD_LLM_w0.1_k100_g0.90
+
+══════════════════════════════════════════════
+ Run : SPD_LLM_w0.2_k20_g0.90
+ Args: --use_llm_prior --llm_backend ollama --llm_prior_weight 0.2 --llm_query_interval 20
+ Log : logs/sweep_llm/SPD_LLM_w0.2_k20_g0.90.log
+ Time: vie 08 may 2026 09:18:02 CEST
+══════════════════════════════════════════════
+✓ Done: SPD_LLM_w0.2_k20_g0.90
+
+══════════════════════════════════════════════
+ Run : SPD_LLM_w0.2_k50_g0.90
+ Args: --use_llm_prior --llm_backend ollama --llm_prior_weight 0.2 --llm_query_interval 50
+ Log : logs/sweep_llm/SPD_LLM_w0.2_k50_g0.90.log
+ Time: vie 08 may 2026 11:50:34 CEST
+══════════════════════════════════════════════
+✓ Done: SPD_LLM_w0.2_k50_g0.90
+
+══════════════════════════════════════════════
+ Run : SPD_LLM_w0.2_k100_g0.90
+ Args: --use_llm_prior --llm_backend ollama --llm_prior_weight 0.2 --llm_query_interval 100
+ Log : logs/sweep_llm/SPD_LLM_w0.2_k100_g0.90.log
+ Time: vie 08 may 2026 14:15:20 CEST
+══════════════════════════════════════════════
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
 ==========================================================
-Starting Packed Slurm Job with Rolling Queue (Max 8)
-Running on node: cerber
-Allocated GPU: 
+Running Seed: 0 | Gamma: 0.99
 ==========================================================
-==================================================
-Starting SAC on TiltedWipe for  steps...
-Date: mar 07 abr 2026 17:20:00 CEST
-==================================================
-Finished SAC on SPD_ONLY_C1_NM5_KP1_300
-All experiments queued. Waiting for the final batch to finish...
-✅ All Door experiments completed successfully!
+-> Starting: baseline_g0.99_s0 | Logging to logs/pih/baseline_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
 ==========================================================
-Starting Packed Slurm Job with Rolling Queue (Max 8)
-Running on node: cerber
-Allocated GPU: 
+Running Seed: 0 | Gamma: 0.99
 ==========================================================
-==================================================
-Starting SAC on TiltedWipe for  steps...
-Date: mar 07 abr 2026 17:21:44 CEST
-==================================================
-Finished SAC on SPD_ONLY_C1_NM5_KP1_300
-All experiments queued. Waiting for the final batch to finish...
-✅ All Door experiments completed successfully!
+-> Starting: baseline_g0.99_s0 | Logging to logs/pih/baseline_g0.99_s0.log
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 226209 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
 ==========================================================
-Starting Packed Slurm Job with Rolling Queue (Max 8)
-Running on node: cerber
-Allocated GPU: 
+Running Seed: 0 | Gamma: 0.99
 ==========================================================
-==================================================
-Starting SAC on TiltedWipe for  steps...
-Date: mar 07 abr 2026 17:22:15 CEST
-==================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 228586 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
 ==========================================================
-Starting Packed Slurm Job with Rolling Queue (Max 8)
-Running on node: cerber
-Allocated GPU: 
+Running Seed: 0 | Gamma: 0.99
 ==========================================================
-All experiments queued. Waiting for the final batch to finish...
-==================================================
-Starting SAC on TiltedWipe for  steps...
-Date: mié 08 abr 2026 00:40:24 CEST
-==================================================
-Finished SAC on FIXED_C1_NM5_KP1_300
-✅ All Door experiments completed successfully!
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
 ==========================================================
-Starting Packed Slurm Job with Rolling Queue (Max 8)
-Running on node: cerber
-Allocated GPU: 
+Running Seed: 0 | Gamma: 0.99
 ==========================================================
-All experiments queued. Waiting for the final batch to finish...
-==================================================
-Starting SAC on TiltedWipe for  steps...
-Date: mié 08 abr 2026 00:49:02 CEST
-==================================================
-Finished SAC on FIXED_C1_NM5_KP1_300
-✅ All Door experiments completed successfully!
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 229914 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
 ==========================================================
-Starting Packed Slurm Job with Rolling Queue (Max 8)
-Running on node: cerber
-Allocated GPU: 
+Running Seed: 0 | Gamma: 0.99
 ==========================================================
-All experiments queued. Waiting for the final batch to finish...
-==================================================
-Starting SAC on TiltedWipe for  steps...
-Date: mié 08 abr 2026 00:49:43 CEST
-==================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 230491 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 232697 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 233889 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 234992 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 237303 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+run_pih.sh: line 21: 240748 Segmentation fault      (core dumped) $BASE_CMD --run_name $RUN_NAME --seed $seed --gamma $gamma --use_llm_prior --llm_prior_weight 0.2 --llm_backend ollama > "logs/pih/${RUN_NAME}.log" 2>&1
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: llm0.2_g0.99_s0 | Logging to logs/pih/llm0.2_g0.99_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: baseline_g0.95_s0 | Logging to logs/pih/baseline_g0.95_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: baseline_g0.95_s0 | Logging to logs/pih/baseline_g0.95_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: baseline_llm0.2_g0.95_s0 | Logging to logs/pih/baseline_llm0.2_g0.95_s0.log
+-> Starting: baseline_llm0.4_g0.95_s0 | Logging to logs/pih/baseline_llm0.4_g0.95_s0.log
+-> Starting: baseline_from_scratch_g0.95_s0 | Logging to logs/pih/baseline_from_scratch_g0.95_s0.log
+==========================================================
+Running Seed: 0 | Gamma: 0.90
+==========================================================
+-> Starting: baseline_llm0.2_g0.90_s0 | Logging to logs/pih/baseline_llm0.2_g0.90_s0.log
+-> Starting: baseline_llm0.4_g0.90_s0 | Logging to logs/pih/baseline_llm0.4_g0.90_s0.log
+-> Starting: baseline_from_scratch_g0.90_s0 | Logging to logs/pih/baseline_from_scratch_g0.90_s0.log
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: baseline_llm0.2_g0.99_s0 | Logging to logs/pih/baseline_llm0.2_g0.99_s0.log

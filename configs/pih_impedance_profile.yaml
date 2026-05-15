@@ -1,0 +1,62 @@
+# Impedance profile for PegInsertionSide-v1 (ManiSkill)
+# Manually seeded with expert impedance intuition; run profile_generator.py
+# to regenerate / refine with an LLM.
+#
+# Physical units:
+#   kp_trans: diagonal translational stiffness [Kx, Ky, Kz]  (N/m,     range 1–300)
+#   kp_rot:   rotational stiffness             [Kx, Ky, Kz]  (N·m/rad, range 1–300)
+#
+# PiH task geometry (PegInsertionSide-v1):
+#   - Insertion axis: roughly +Y in EEF task space
+#   - Lateral axes: XY — need compliance to absorb jamming
+#   - Peg is on the robot EEF; hole is world-fixed
+
+task: PegInsertionSide-v1
+robot: Panda
+description: >
+  Peg-in-hole insertion from the side. The peg is attached to the robot EEF.
+  Key challenges: lateral alignment precision, compliant insertion to avoid
+  jamming, and final seating to full depth.
+
+phases:
+  approach:
+    kp_trans: [40.0, 40.0, 40.0]
+    kp_rot:   [20.0, 20.0, 20.0]
+    description: "Free-space approach: uniform medium stiffness, robot moves freely"
+
+  align:
+    kp_trans: [80.0, 20.0, 80.0]
+    kp_rot:   [30.0, 10.0, 30.0]
+    description: "Alignment: stiffen XZ for precise hole centering, compliant along insertion axis Y"
+
+  insert:
+    kp_trans: [25.0, 90.0, 25.0]
+    kp_rot:   [15.0, 23.0, 15.0]
+    description: "Insertion: highly compliant XZ to absorb jamming, stiff along Y for depth progress"
+
+  seated:
+    kp_trans: [50.0, 150.0, 50.0]
+    kp_rot:   [25.0, 20.0, 25.0]
+    description: "Seating: very stiff along Y to press peg to full insertion depth"
+
+# System prompt injected into the runtime LLMImpedancePlanner for this task.
+planner_prompt: |
+  You are an impedance control expert for a robot performing a peg-in-hole (PiH)
+  insertion task. The robot uses a Variable Impedance Controller: positional
+  stiffness is a full 3×3 SPD matrix (on the Sym+(3) manifold) and orientation
+  is controlled via SO(3) error.
+
+  The peg is mounted on the robot's end-effector. The hole is fixed in the world.
+  The insertion axis is roughly along the robot's Y-axis in task space.
+
+  At each query you receive: EEF position, peg head position relative to the hole,
+  whether the peg is in contact, and the current insertion depth. Select the best
+  impedance mode for the current phase.
+
+  Available modes:
+    approach – free-space motion toward the hole, no contact
+    align    – peg tip near the hole opening, fine lateral positioning required
+    insert   – peg partially inserted, guiding along the insertion axis
+    seated   – peg nearly fully inserted, pressing to final depth
+
+  Respond with ONLY the mode name, nothing else.

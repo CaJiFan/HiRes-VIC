@@ -1,0 +1,63 @@
+task: PegInsertionSide-v1
+robot: 7-DOF Panda arm with parallel-jaw gripper
+description: Peg-in-hole (PiH) insertion from the side. The peg is grasped by (or
+  rigidly attached to) the robot EEF. The cylindrical hole is fixed in the world.
+  The robot must align the peg tip with the hole opening, then push it to full insertion
+  depth.
+phases:
+  approach:
+    kp_trans:
+    - 50
+    - 50
+    - 50
+    kp_rot:
+    - 50
+    - 50
+    - 50
+    description: Low stiffness for safe approach and initial alignment with the hole.
+  align:
+    kp_trans:
+    - 10
+    - 100
+    - 10
+    kp_rot:
+    - 10
+    - 100
+    - 10
+    description: High stiffness along Y for precise lateral alignment; compliant in
+      X and Z.
+  insert:
+    kp_trans:
+    - 10
+    - 200
+    - 10
+    kp_rot:
+    - 10
+    - 200
+    - 10
+    description: High stiffness along Y for insertion force; compliant in X and Z
+      to avoid jamming.
+  seated:
+    kp_trans:
+    - 100
+    - 300
+    - 100
+    kp_rot:
+    - 100
+    - 300
+    - 100
+    description: Maximum stiffness to ensure peg is fully seated without excessive
+      force.
+planner_prompt: 'You are controlling a robot for a PegInsertionSide-v1 task. Choose
+  among the following impedance phases based on the current task stage:
+
+  - approach: Use when the robot is moving towards the hole for initial alignment.
+
+  - align: Use when aligning the peg tip laterally with the hole opening.
+
+  - insert: Use when pushing the peg into the hole, ensuring progress without jamming.
+
+  - seated: Use when the peg is nearly fully inserted and needs to be seated to full
+  depth.
+
+  Respond with ONLY the mode name.'

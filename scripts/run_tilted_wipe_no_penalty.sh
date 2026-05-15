@@ -82,20 +82,19 @@ wait_for_queue() {
 TASK="TiltedWipe"
 NUM_MARKERS=5
 
-
-for SEED in 3
+for SEED in 1 0 
 do    
-    run_train $TASK "FIXED" "" $NUM_MARKERS "FIXED_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    # wait_for_queue
+    run_train $TASK "TRUE" "TRUE" $NUM_MARKERS "FOS_FULL_GRL_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+    wait_for_queue
 
-    # run_train $TASK "TRUE" "FALSE" $NUM_MARKERS "SPD_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED
-    # wait_for_queue
+    run_train $TASK "TRUE" "FALSE" $NUM_MARKERS "FOS_SPD_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+    wait_for_queue
 
-    # run_train $TASK "FALSE" "TRUE" $NUM_MARKERS "LIE_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    # wait_for_queue
+    run_train $TASK "FALSE" "TRUE" $NUM_MARKERS "FOS_LIE_ONLY_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+    wait_for_queue
 
-    # run_train $TASK "FALSE" "FALSE" $NUM_MARKERS "BASELINE_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
-    # wait_for_queue
+    run_train $TASK "FALSE" "FALSE" $NUM_MARKERS "FOS_BASELINE_C1_NM${NUM_MARKERS}_KP1_300" $SEED &
+    wait_for_queue
 done
 
 # After all 16 jobs have been pushed through the queue, wait for the final batch of up to 8 to finish.

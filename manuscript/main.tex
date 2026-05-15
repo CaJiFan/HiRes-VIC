@@ -1,0 +1,530 @@
+\documentclass[letterpaper, 10 pt, conference]{IEEEtran}
+
+\usepackage{amsmath,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{subcaption}
+\usepackage{cleveref}
+
+\usepackage{capt-of} % Allows \captionof{figure}{...} without breaking IEEE styling
+\usepackage{pifont}splitdecisions2024
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+
+\title{\LARGE \bf
+LLM-Guided Geometric Reinforcement Learning for Safe Contact-Rich Manipulation
+}
+
+\author{Carlos Jiménez-Farfán$^{1,2}$ \quad Bernard Bayle$^{1}$ \quad Mario Martin$^{2}$ \quad and Adrià Colomé Figueras$^{1}$\\
+$^{1}$Institut de Robòtica i Informàtica Industrial, CSIC-UPC \\
+$^{2}$Universitat Politècnica de Catalunya \\
+\texttt{\{cjimenez, bbayle, acolome\}@iri.upc.edu}, \quad \texttt{mario.martin@upc.edu}
+
+}
+
+\makeatletter
+\let\@oldmaketitle\@maketitle % Store the original maketitle
+\renewcommand{\@maketitle}{\@oldmaketitle % Execute the original maketitle
+  \begin{center}
+    \vspace{-0.5em} % Adjust this to bring the image closer to the authors
+    \includegraphics[width=\textwidth]{images/hires-vic-arch.png}
+    \captionof{figure}{Initial Overview of System Architecture}
+    \label{fig:teaser}
+  \end{center}
+  \vspace{1.0em} % Add some breathing room before the Abstract starts
+}
+\makeatother
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\pagestyle{empty}
+
+\begin{abstract}
+Contact-rich manipulation demands controllers that are simultaneously compliant, safe, and task-aware.
+We present \textit{HiRes-VIC}, a hierarchical framework that combines Geometric Reinforcement Learning
+(G-RL) with a Large Language Model (LLM) impedance prior to learn safe Variable Impedance Control
+(VIC) policies for robotic wiping.
+At the geometry level, a Riemannian wrapper projects the SAC policy's stiffness output onto the
+Symmetric Positive Definite (SPD) manifold via the matrix exponential, guaranteeing Lyapunov-stable
+interaction dynamics by construction.
+At the semantic level, an LLM periodically classifies the current wiping phase and biases the
+learned stiffness distribution toward physically meaningful impedance regimes, injecting expert
+contact-task knowledge without requiring manual reward engineering.
+Queries are dispatched asynchronously in a daemon thread, imposing zero latency overhead on the
+20\,Hz control loop.
+Ablation studies on the Robosuite \texttt{TiltedWipe} task demonstrate that the full Riemannian
+($\mathcal{S}_{++}^3$) parameterization enables emergent anisotropic scrubbing dynamics absent in
+Euclidean baselines, and preliminary results suggest that LLM-guided stiffness priors accelerate
+task-phase alignment during early training.
+\end{abstract}
+
+
+
+\section{Introduction}
+Contact-rich manipulation remains a significant challenge in robotics. Traditional rigid position control often fails or causes hardware damage when dealing with environmental uncertainties. Variable Impedance Control (VIC) mitigates this by allowing the robot to modulate its stiffness and damping in real-time. Learning these stiffness parameters via Reinforcement Learning (RL) has gained traction, but mapping neural network outputs to physical constraints introduces significant optimization hurdles.
+
+This report documents the iterative development and stabilization of a VIC-RL framework that addresses these challenges at two complementary levels. At the \textit{geometric} level, we embed stiffness learning on the Riemannian manifold of Symmetric Positive Definite matrices ($\mathcal{S}_{++}^3$), guaranteeing physically realizable, Lyapunov-stable impedance profiles by construction. At the \textit{semantic} level, we introduce an LLM-guided impedance prior that periodically classifies the current task phase and biases the RL agent's stiffness distribution toward expert-prescribed compliance regimes, accelerating early exploration without constraining the agent's long-horizon freedom.
+
+\section{Related Work}
+Recent advancements in robot learning have increasingly utilized the Robosuite framework \cite{zhu2020robosuite} for standardized benchmarking. While algorithms like Proximal Policy Optimization (PPO) \cite{schulman2017proximal} and Soft Actor-Critic (SAC) \cite{haarnoja2018soft} excel at kinematic tasks, applying them to dynamics-heavy contact tasks often requires specialized action spaces. Martín-Martín et al. \cite{martin2019variable} demonstrated that using Variable Impedance Control in End-Effector Space (VICES) improves sample efficiency and safety. Further improvements addressing Q-value overestimation in continuous domains have been proposed in TD3 \cite{fujimoto2018addressing} and TQC \cite{kuznetsov2020controlling}; our work builds on SAC as the off-policy backbone.
+
+\subsection{Geometric and Variable Impedance Control in Contact-Rich Tasks}
+Contact-rich manipulation requires control frameworks that can safely regulate interaction forces while navigating complex environmental constraints \cite{pu2024safe}. 
+\begin{itemize}
+    \item \textbf{Safe RL with Variable Impedance:} To handle the unpredictability of physical contact, recent works have heavily integrated Variable Impedance Control (VIC) \cite{martin2019variable} into Reinforcement Learning (RL). For instance, SRL-VIC formulates a safe RL framework that dynamically adjusts stiffness to prevent excessive interaction forces during contact-rich tasks \cite{srlvic2024}. Similarly, other approaches have successfully augmented Riemannian Motion Policies (RMPs) \cite{ratliff2018riemannian} to guarantee safe impedance execution during manipulation \cite{rmp_impedance2023}.
+    \item \textbf{Topology-Aware Geometric Priors:} Standard Euclidean action spaces often fail to capture the coupled rotational and translational dynamics required for complex end-effector motions. To address this, foundational frameworks like Geometric Reinforcement Learning (G-RL) \cite{alhousani2023geometric} have demonstrated how to leverage Riemannian manifolds and tangent spaces to properly parameterize policy learning for non-Euclidean data such as orientation and impedance. Building directly on this, recent methods explicitly embed Lie Group orientations \cite{liegroupRL2024} and SE(3)-equivariant geometric impedance priors \cite{se3geometric2023} into the RL action space. This ensures that the learned stiffness matrices strictly adhere to Symmetric Positive Definite (SPD) manifold constraints, expanding on earlier force-based impedance learning \cite{abudakka2018force}.
+\end{itemize}
+
+\subsection{Foundation Models and Hierarchical Reinforcement Learning}
+While geometric controllers excel at local contact dynamics, they suffer from spatial myopia during long-horizon exploration. 
+\begin{itemize}
+    \item \textbf{VLM-Guided Impedance and Wiping:} Large Language and Vision-Language Models (VLMs) have emerged as powerful tools for bridging this spatial gap. Notably, \textit{CompliantVLA-adaptor} \cite{compliantVLA2024} integrates VLM guidance with variable impedance actions to enable safe contact-rich manipulation. Furthermore, specific to our domain, VLMs have been employed to construct systematic curricula and reward structures specifically for high-quality robotic wiping policies \cite{wipingVLM2023}. 
+    \item \textbf{Hierarchical and Residual Frameworks:} To prevent the high-latency VLM from bottlenecking the high-frequency control loop, our work is inspired by hierarchical and residual architectures \cite{residualRL2019, rlingua2024}. By treating the LLM/VLM as a semantic high-level planner \cite{splitdecisions2024, ma2024explorllm, llmtale2024} and utilizing impedance primitives for sequential tasks \cite{tahmaz2025impedance}, we successfully decouple the discrete visual reasoning from the continuous $\mathcal{G}$-RL contact execution.
+\end{itemize}
+
+
+
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{System Architecture}
+To effectively learn geometric impedance behaviors, we decoupled the geometric transformations from the physical simulation by introducing a two-stage architecture: a \textit{Geometric Wrapper} and a custom \textit{Riemannian Controller}.
+
+\subsubsection{Geometric Wrapper (Geometry Stage)}
+The wrapper acts as the bridge between the Reinforcement Learning (RL) agent and the environment, handling non-euclidean observation mapping and action space transformations. 
+\begin{itemize}
+    \item \textbf{Dynamic Action Spaces:} The wrapper dynamically overrides the environment's action bounds to match the geometric mode. For the Symmetric Positive Definite (SPD) manifold, it requests a 15-dimensional action from the agent: 6 Mandel parameters (translational stiffness), 3 rotational stiffness gains, 3 Cartesian position deltas, and 3 orientation deltas. Before passing to the physics engine, the wrapper expands the 6 Mandel parameters into the full $3 \times 3$ stiffness matrix (9 elements), yielding the 18-dimensional input expected by the base controller.
+    \item \textbf{Lie Group Observation Mapping:} To provide the RL agent with a continuous and singularity-free representation of orientation, we map the end-effector's unit quaternions to the Lie Algebra $\mathfrak{so}(3)$ using the logarithmic map:
+    \begin{equation}
+        \bm{\omega} = \log_{SO(3)}(\mathbf{R})^{\vee} \in \mathbb{R}^3
+    \end{equation}
+    where $\mathbf{R} \in SO(3)$ is the rotation matrix corresponding to the end-effector quaternion.
+    \item \textbf{Telemetry \& Logging:} The wrapper intercepts the exact physical stiffness matrices prior to simulation, extracting the diagonal elements for mathematically accurate Weights \& Biases (W\&B) logging, alongside tracking joint violations and end-effector forces.
+\end{itemize}
+
+\subsubsection{Riemannian Controller (Physics Stage)}
+We developed the \texttt{RiemannianController} as a subclass of Robosuite's native \texttt{OSC\_POSE} controller, introducing a novel \texttt{impedance\_mode = `riemannian\_kp'}. 
+While the wrapper handles the geometric projection of the stiffness matrix $\mathbf{K}_p$, the controller handles the physical execution and stability bounds. Specifically, it computes the critical damping matrix $\mathbf{K}_d$ via the spectral square root of the symmetrised $\mathbf{K}_p$:
+\begin{equation}
+    \mathbf{K}_d = 2\,\mathbf{K}_p^{1/2} = 2\,\mathbf{V}\,\mathrm{diag}\!\left(\sqrt{\lambda_i}\right)\mathbf{V}^\top
+\end{equation}
+where $\mathbf{K}_p = \mathbf{V}\,\mathrm{diag}(\lambda_i)\,\mathbf{V}^\top$ is the eigendecomposition of the symmetrised stiffness matrix and eigenvalues are clamped to $\lambda_i \geq 1$. This yields a critically-damped impedance law, ensuring passivity and preventing simulation instability.
+
+\subsection{Geometric Impedance Formulation}
+When the \texttt{--use\_spd} flag is active, the RL agent does not output flat stiffness bounds. Instead, it outputs 6 coordinates corresponding to the Mandel basis. The wrapper constructs a symmetric matrix $\mathbf{S} \in \mathbb{S}^3$ and projects it onto the SPD manifold $\mathcal{S}_{++}^3$ using the matrix exponential:
+\begin{equation}
+    \mathbf{K}_p = \exp(\mathbf{S}) = \sum_{k=0}^{\infty} \frac{1}{k!} \mathbf{S}^k
+\end{equation}
+This formulation guarantees that the resulting translational stiffness matrix $\mathbf{K}_p$ is strictly positive definite. Crucially, enforcing $\mathbf{K}_p \succ 0$ (and consequently its critically damped counterpart $\mathbf{K}_d \succ 0$) ensures the closed-loop impedance controller remains \textbf{Lyapunov stable}. Because the artificial potential energy function $V(\tilde{\mathbf{x}}) = \frac{1}{2}\tilde{\mathbf{x}}^T \mathbf{K}_p \tilde{\mathbf{x}}$ remains strictly convex and lower-bounded, the system guarantees passive, physically realizable interaction dynamics—even while the agent explores highly coupled, off-diagonal stiffness behaviors during training.
+
+\subsection{Planned Extension: Full Vision-Language Integration}
+\label{sec:vlm_extension}
+The LLM impedance prior (Section~\ref{sec:llm_framework}) uses only proprioceptive state as input.
+A natural extension replaces the text-based state description with raw RGB observations, upgrading
+the planner to a full Vision-Language Model (VLM). This section outlines the envisioned
+hierarchical architecture for future work.
+
+To bridge the gap between high-level visual reasoning and low-level geometric impedance control, the VLM would act as a high-level cognitive planner, processing RGB scene observations and natural language instructions to parameterize the environment for the low-level geometric controller.
+Drawing upon the \textit{Code-as-Policies} (CaP) paradigm, the VLM would not attempt to predict high-frequency joint torques—a known failure mode for autoregressive language models—but instead output executable API calls that dynamically set operational constraints, such as target waypoints or baseline stiffness priors.
+
+Furthermore, we draw inspiration from the concept of \textit{Reward Machines} by utilizing the VLM to synthesize structured reward topologies. By visually assessing task progression (e.g., spatial clearance of wiped markers), the VLM can dictate finite state transitions and dynamically shape the reward signal, leaving the Riemannian policy to safely navigate the non-Euclidean contact physics of the wiping maneuver.
+
+\subsection{LLM-Guided Impedance Prior Framework}
+\label{sec:llm_framework}
+
+To further accelerate sample efficiency and inject contact-task semantic knowledge into
+the geometric RL agent, we introduce a hierarchical \textit{LLM Impedance Prior} layer.
+Rather than requiring the RL agent to discover appropriate stiffness profiles
+entirely from reward signals, a Large Language Model (LLM) acts as a periodic
+high-level consultant that biases the learned stiffness distribution toward
+physically meaningful impedance regimes.
+
+\subsubsection{Mode Library and Physical Encoding}
+We define a discrete library of four impedance modes, each encoding domain knowledge
+about the mechanical requirements of a distinct wiping sub-phase:
+
+\begin{table}[h]
+\centering
+\caption{LLM Impedance Mode Library (Physical Values)}
+\label{tab:impedance_modes}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Mode} & \textbf{$K_p^{\text{trans}}$ [N/m]} & \textbf{$K_p^{\text{rot}}$ [N·m/rad]} \\ \midrule
+\texttt{approach}     & diag(33, 33, 20) & diag(15, 15, 15) \\
+\texttt{contact\_edge}& diag(90, 90, 12) & diag(20, 20, 10) \\
+\texttt{wipe}         & diag(90, 90, 12) & diag(20, 20, 10) \\
+\texttt{lift}         & diag(20, 20, 55) & diag(15, 15, 15) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each mode prescribes anisotropic translational stiffness aligned with the task
+physics: the \texttt{approach} mode enforces moderate isotropic compliance for
+safe free-space motion; \texttt{contact\_edge} stiffens the lateral ($XY$) axes
+upon establishing surface contact while maintaining low normal ($Z$) stiffness
+to prevent excessive impact forces; \texttt{wipe} retains this lateral stiffness
+profile and delegates stroke direction entirely to the RL agent; \texttt{lift}
+inverts the priority, stiffening $Z$ for clean surface withdrawal.
+
+\subsubsection{Action-Space Blending}
+The physical stiffness values are pre-converted into the
+RL agent's normalised $[-1, 1]$ action space at import time, using the inverse
+of the \texttt{GeometricWrapper} scaling:
+
+\begin{equation}
+    a_i^{\text{prior}} = \frac{2\ln K_i}{\ln 300} - 1, \quad
+    a_j^{\text{rot,prior}} = \frac{2(K_j^{\text{rot}} - 1)}{299} - 1
+\end{equation}
+
+At each environment step, the blended stiffness action $\tilde{a}$ is formed by a
+convex combination of the SAC policy output $\pi_\theta(s)$ and the LLM-selected
+prior $a^{\text{prior}}$, parametrised by the \textit{prior weight} $w \in [0,1]$:
+
+\begin{equation}
+    \tilde{a}_{1:9} = (1 - w)\,\pi_\theta(s)_{1:9} + w\,a^{\text{prior}}_{1:9}
+    \label{eq:blending}
+\end{equation}
+
+The motion subspace $\tilde{a}_{10:}$ (Cartesian position/orientation deltas)
+is passed through unmodified, ensuring the LLM exerts \textit{no influence} over
+the robot's trajectory planning — only over its compliance profile.
+The blended action is subsequently projected onto $\mathcal{S}_{++}^3$ via the
+matrix exponential, preserving the Lyapunov stability guarantees of
+Section~\ref{sec:methodology}.
+
+\subsubsection{Non-Blocking Asynchronous Querying}
+To prevent the LLM inference latency from bottlenecking the high-frequency
+($\sim$20 Hz) control loop, queries are dispatched asynchronously in a
+\texttt{daemon} background thread every $K$ environment steps. The policy
+always receives the most recently completed suggestion instantaneously;
+the planner updates it when the thread resolves. This decoupling ensures
+zero wall-clock overhead on the RL training loop regardless of model
+or network latency.
+
+The LLM receives a structured natural-language prompt at each query:
+the system message describes the controller architecture and available modes,
+while the user message encodes the current proprioceptive state —
+EEF position, binary surface contact, wipe completion fraction, and
+distance to the wipe centroid:
+
+\begin{verbatim}
+[SYSTEM] You are an impedance control expert
+for a robot wiping task. Positional stiffness
+is a 3x3 SPD matrix (Sym+(3) manifold),
+orientation via SO(3) error. Select mode:
+approach | contact_edge | wipe | lift.
+Respond with ONLY the mode name.
+
+[USER] EEF position: [0.195, 0.000, 0.902]
+In contact with surface: True
+Wipe completion: 3.0%
+Distance to wipe centroid: 0.081 m
+Which impedance mode?
+
+[ASSISTANT] contact_edge
+\end{verbatim}
+
+A multi-turn conversation history (bounded to 10 turns) is maintained within
+each episode, allowing the planner to reason about phase progression over time.
+
+% -----------------------------------------------------------------
+
+
+\section{Experimental Setup}
+
+\subsection{Wipe Environment and Reward Formulation}
+\label{sec:wipe_reward_formulation}
+
+The experimental evaluation is conducted using the \textit{Wipe} manipulation environment from the Robosuite \cite{zhu2020robosuite} framework. The task requires the robot to use a wiping tool attached to its end-effector to clear a set of spatial dirt markers distributed across a table. To guide the SAC agent's exploration, we employ a highly shaped, dense reward function. The critical parameters governing this reward topology, defined within the \texttt{WIPE\_TASK\_CONFIG}, are detailed in Table \ref{tab:reward_params}.
+
+\begin{table}[h]
+\centering
+\caption{Wipe Environment Reward and Task Parameters}
+\label{tab:reward_params}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\ \midrule
+Number of Markers ($N_m$) & 5 \\
+Unit Wiped Reward ($k_w$) & 50.0 \\
+Wipe Contact Reward ($k_c$) & 0.01 \\
+Distance Multiplier ($k_d$) & 5.0 \\
+Distance Tanh Multiplier ($\tau_d$) & 5.0 \\
+Excess Force Penalty Multiplier ($k_f$) & 0.05 \\
+Pressure Threshold ($f_{\text{th}}$) & 0.5 N \\
+Maximum Pressure Threshold ($f_{\text{max}}$) & 60.0 N \\
+Arm Limit/Collision Penalty & -10.0 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Reward Computation}
+At each simulation timestep $t$, the environment computes a raw, unnormalized step reward $r_{\text{raw}, t}$. If the robot's arm (excluding the wiping tool) collides with the table or violates joint limits, the step reward is immediately overridden by the collision penalty ($-10.0$). Otherwise, the reward is calculated as the sum of discrete task achievements and continuous dense shaping terms:
+
+\begin{enumerate}
+    \item \textbf{Discrete Wiping Bonus:} For every new dirt marker $i$ cleared during the current step, the agent receives the unit wiped reward: $r_{\text{wipe}} = \sum k_w$.
+    \item \textbf{Proximity Shaping:} A continuous reward inversely proportional to the mean distance $\bar{d}$ to the remaining markers: 
+    \begin{equation}
+        r_{\text{dist}} = k_d \left( 1 - \tanh(\tau_d \cdot \bar{d}) \right)
+    \end{equation}
+    \item \textbf{Contact and Pressure Shaping:} If the wiping tool maintains contact with the table, it receives a base contact reward $k_c$. Furthermore, if the applied end-effector force $f_e$ falls within the optimal scrubbing range ($f_{\text{th}} < f_e \le f_{\text{max}}$), the agent receives a dynamic pressure bonus:
+    \begin{equation}
+        r_{\text{press}} = k_c + 0.01 \cdot f_e
+    \end{equation}
+    Conversely, if $f_e > f_{\text{max}}$, a penalty of $-k_f \cdot f_e$ is applied.
+    \item \textbf{Task Completion:} If all markers are wiped, a discrete $r_{\text{complete}}$ bonus is added, and the episode terminates early.
+\end{enumerate}
+
+To maintain stable gradient updates during training, Robosuite applies a dynamic normalization factor $\eta$ based on the theoretical maximum return, squashing the final step reward: $r_t = \eta \cdot r_{\text{raw}, t}$.
+
+\subsubsection{Limitations of the Reward Formulation}
+While this dense formulation successfully bootstraps the RL agent's spatial learning, empirical analysis reveals a critical vulnerability in its normalization mechanics.
+
+Because the dynamic normalization factor $\eta$ aggressively squashes the massive discrete wiping rewards (e.g., scaling $50.0$ down to $\approx 2.0$), the discrete task objectives are mathematically dwarfed by the cumulative sum of the continuous dense rewards (proximity and contact) if the agent artificially extends the trajectory. The environment issues positive rewards for maintaining table contact but lacks a negative time penalty (e.g., $-0.1$ per step) to encourage speed.
+
+This flaw renders the cumulative episodic return an invalid metric for evaluating true task performance. This discrepancy is highlighted by comparing two deterministic evaluation episodes from our SAC training runs:
+\begin{itemize}
+    \item \textbf{Episode A (Exploitative):} The agent wiped 80\% of the markers and spent the remainder of the 300-step horizon slowly maintaining table contact, accruing a continuous $\approx 0.13$ reward per step. It achieved a high final return of \textbf{46.76}.
+    \item \textbf{Episode B (Efficient):} The agent efficiently wiped 100\% of the markers in only 57 steps, triggering early termination. Despite achieving perfect physical task completion, it accumulated fewer continuous contact steps, resulting in a significantly lower final return of \textbf{16.44}.
+\end{itemize}
+
+Due to this reward exploitation, plotting standard episodic returns obfuscates the true capability of the impedance controllers. Consequently, our results strictly report the physically interpretable Spatial Clearance (Wipe) Percentage to ensure a rigorous comparison of the controllers' manipulation efficacy.
+
+\subsection{Observation Space Setup}
+\label{sec:obs-setup}
+
+The agent observation is built from two concatenated modality vectors: \texttt{object-state} and \texttt{proprio-state}. Each of these keys is itself formed by concatenating a set of raw observation fields from the environment.
+
+\begin{itemize}
+    \item \textbf{object-state}: contains condensed task/object information. For the case of robosuite's Wipe environment.
+    \begin{itemize}
+        \item \texttt{proportion\_wiped}: fraction of the target surface that has been wiped so far.
+        \item \texttt{wipe\_radius}: current radius of the wipe region being tracked.
+        \item \texttt{wipe\_centroid}: 3D position of the centroid of the wiped surface area.
+        \item \texttt{gripper\_to\_wipe\_centroid}: 3D vector from the gripper to the wipe centroid.
+    \end{itemize}
+
+    \item \textbf{robot0\_proprio-state}: contains robot proprioceptive features
+    \begin{itemize}
+        \item \texttt{robot0\_joint\_pos}: robot joint position values.
+        \item \texttt{robot0\_joint\_pos\_cos}: cosine of each robot joint position, used to encode angular periodicity.
+        \item \texttt{robot0\_joint\_pos\_sin}: sine of each robot joint position, used to encode angular periodicity.
+        \item \texttt{robot0\_joint\_vel}: robot joint velocity values.
+        \item \texttt{robot0\_joint\_acc}: robot joint acceleration values.
+        \item \texttt{robot0\_eef\_pos}: end-effector 3D position.
+        \item \texttt{robot0\_eef\_quat}/\texttt{robot0\_eef\_quat\_site}: end-effector orientation as a quaternion; \texttt{robot0\_eef\_quat\_site} is typically the site-based orientation aligned with the controller target.
+        \item \texttt{robot0\_gripper\_qpos}: gripper position values (jaw opening/closing).
+        \item \texttt{robot0\_gripper\_qvel}: gripper velocity values.
+        \item \texttt{robot0\_contact}: boolean contact indicator for whether the gripper is touching the wipe object.
+    \end{itemize}
+\end{itemize}
+
+In our implementation, the raw quaternions for the end effector orientation are optionally converted to a Lie-algebra representation before being concatenated, while all other fields are flattened directly into the final observation vector.
+
+\subsection{Task Configuration}
+Experiments were conducted on the Robosuite \texttt{TiltedWipe} environment, a custom subclass of the standard \texttt{Wipe} task that introduces a configurable table-surface inclination angle to increase contact difficulty and prevent trivial hovering solutions. Initial trials demonstrated that extended horizons (e.g., $H=1000$) introduced compounding credit assignment issues for the SAC agent. We aligned our setup with established benchmarks, utilizing a shorter, denser horizon of $H=300$ for $N=5$ dirt markers, while retaining condensed object observations (\texttt{use\_condensed\_obs=True}).
+
+\subsection{RL Setup \& Reproducibility}
+To ensure mathematically rigorous ablation studies, the environment was vectorized across 8 parallel CPU workers (\texttt{SubprocVecEnv}) for all geometric-only runs. LLM-augmented runs use 4 parallel workers to reduce inter-thread contention from concurrent asynchronous LLM queries, while maintaining the same total training budget. To mitigate the non-deterministic nature of GPU floating-point atomic operations during matrix multiplications, strict hardware determinism was enforced via \texttt{CUBLAS\_WORKSPACE\_CONFIG} and PyTorch CuDNN backend locks, guaranteeing 1:1 reproducibility across baseline seeds.
+
+\subsection{Ablation Configurations}
+\label{sec:ablation_configs}
+Table~\ref{tab:ablation_configs} summarises the five configurations evaluated in this work.
+Each isolates a specific contribution of the proposed framework.
+
+\begin{table}[h]
+\centering
+\caption{Ablation Configurations}
+\label{tab:ablation_configs}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Config} & \textbf{SPD Manifold} & \textbf{Lie Obs.} & \textbf{LLM Prior} \\ \midrule
+\texttt{BASELINE}  & \xmark & \xmark & \xmark \\
+\texttt{LIE\_ONLY} & \xmark & \cmark & \xmark \\
+\texttt{SPD\_ONLY} & \cmark & \xmark & \xmark \\
+\texttt{FULL\_GRL} & \cmark & \cmark & \xmark \\
+\texttt{LLM\_SPD}  & \cmark & \xmark & \cmark \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\texttt{BASELINE} uses a standard Euclidean diagonal stiffness parameterisation (\texttt{variable\_kp}).
+\texttt{LIE\_ONLY} adds the $SO(3)$ logarithmic observation map without changing the stiffness parameterisation.
+\texttt{SPD\_ONLY} applies the full Riemannian stiffness projection with standard quaternion observations.
+\texttt{FULL\_GRL} combines both geometric contributions.
+\texttt{LLM\_SPD} augments \texttt{SPD\_ONLY} with the LLM impedance prior (Section~\ref{sec:llm_framework}); Lie group observations are omitted to isolate the contribution of the LLM prior from the orientation encoding.
+
+\subsection{LLM Hyperparameter Study and API Cost Analysis}
+\label{sec:llm_cost}
+
+\subsubsection{Hyperparameters Under Study}
+Two hyperparameters govern the LLM--RL interaction and are swept in a full
+$3 \times 3$ factorial grid, with $\gamma = 0.90$ fixed from prior baseline
+calibration (Section~\ref{sec:wipe_reward_formulation}):
+
+\begin{itemize}
+    \item \textbf{Prior weight $w$ $\in \{0.1,\,0.2,\,0.4\}$}: controls the
+    degree to which the LLM prior dominates the stiffness output
+    (Equation~\ref{eq:blending}). A value of $w = 0$ recovers the pure
+    geometric RL baseline. Values that are too large suppress SAC's
+    exploration freedom in the stiffness subspace; values that are
+    too small render the prior negligible.
+
+    \item \textbf{Query interval $K$ $\in \{20,\,50,\,100\}$ steps}:
+    determines how frequently the LLM is consulted. At $\sim$20\,Hz
+    control frequency, this corresponds to contact-phase durations of
+    approximately 1\,s, 2.5\,s, and 5\,s respectively, bracketing the
+    expected timescale of phase transitions in the Wipe task. Low $K$
+    queries the model faster than phases meaningfully evolve; high $K$
+    risks missing phase boundaries entirely.
+\end{itemize}
+
+A single no-LLM baseline run (identical architecture, $w = 0$) is included
+for ablation comparison, yielding 10 total training runs of 500\,k timesteps each.
+
+\subsubsection{Inference Cost Estimation}
+We evaluate two OpenAI endpoints to characterise the cost--capability tradeoff
+for online LLM-guided RL. Per-query token consumption is estimated as follows:
+the system prompt contributes $\approx 110$ tokens; the task state description
+$\approx 50$ tokens; the bounded conversation history $\approx 200$ tokens;
+and the output (a single mode name) $\approx 3$ tokens, for a total of
+$\approx 363$ input and $3$ output tokens per query.
+
+With $N_{\text{envs}} = 4$ parallel environments, each executing
+$500\text{k} / 4 = 125\text{k}$ steps per run, the number of LLM queries per
+run is:
+
+\begin{equation}
+    Q = N_{\text{envs}} \times \frac{T}{K} = 4 \times \frac{125{,}000}{K}
+\end{equation}
+
+For $K = 50$ this yields $Q = 10{,}000$ queries per run. Table~\ref{tab:llm_cost}
+summarises the resulting API costs across models and query intervals.
+
+\begin{table}[h]
+\centering
+\caption{Estimated OpenAI API Cost per Training Run (500k steps, $N_{\text{envs}}=4$)}
+\label{tab:llm_cost}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Model} &
+\textbf{K=20} &
+\textbf{K=50} &
+\textbf{K=100} \\
+& ($Q$=25k) & ($Q$=10k) & ($Q$=5k) \\ \midrule
+\texttt{gpt-4o-mini} (\$0.15/\$0.60 per MTok) & \$1.28 & \$0.52 & \$0.26 \\
+\texttt{gpt-4.1-mini} (\$0.40/\$1.60 per MTok) & \$3.65 & \$1.46 & \$0.73 \\
+\texttt{gpt-4o}       (\$2.50/\$10.0 per MTok) & \$22.8 & \$9.13 & \$4.56 \\
+\texttt{Llama 3.2} (Ollama, local)             & \$0.00 & \$0.00 & \$0.00 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+For the full 9-run sweep (excluding the no-LLM baseline), the estimated total
+API cost ranges from \textbf{\$2.34} (\texttt{gpt-4o-mini}, $K=100$) to
+\textbf{\$205} (\texttt{gpt-4o}, $K=20$). Given the classification
+simplicity of the task — selecting among four named modes from a short
+proprioceptive summary — \texttt{gpt-4o-mini} is adopted as the primary
+cloud endpoint, with the locally-hosted \texttt{Llama 3.2} (3B, via Ollama)
+serving as a zero-cost open-source reference. This pairing allows us to
+separately characterise the contribution of model reasoning capability
+versus the structural benefit of the prior blending mechanism itself.
+
+
+
+\section{Preliminary Observations}
+\subsection{Initial Baseline runs}
+\subsubsection{Baseline Competitiveness}
+A key finding from early experiments is that the \texttt{BASELINE} (fixed impedance, \texttt{variable\_kp}) yields a highly competitive wipe percentage relative to the geometric variants.
+This result is significant: it indicates that the \textit{kinematic} component of the policy (Cartesian waypoint selection) is the primary driver of task success in the current configuration, not the impedance profile itself.
+This does not diminish the contribution of Riemannian stiffness learning — rather, it motivates shifting the evaluation focus from raw task completion toward \textit{contact quality metrics} (smoothness, force regulation, anisotropy) where geometric priors provide demonstrable advantages (Section~\ref{sec:geometric_analysis}).
+\subsubsection{Manifold Ablations} Applying the GRL method strictly to a diagonal matrix (scalar exponential map) was tested to provide a dimensionally ``fairer'' comparison against standard \texttt{variable\_kp} controllers, though preliminary results suggest the coupled nature of the full SPD manifold is necessary to see the true benefits of geometric learning.
+
+\subsection{Solving the hovering issue}
+After tuning the $\gamma$ value (default for SAC is 0.99) and setting it to lower values (\textit{e.g., 0.95, 0.90}), we achieved better results in terms of percentage of wiped markers and success rate for all the baseline configurations, in the end we ended up fixing it to 0.90 for the SAC agent.
+
+
+\section{Geometric Control Theory Contribution Analysis}
+\label{sec:geometric_analysis}
+
+\begin{figure*}[htb!] % The asterisk (*) makes it span both columns. [t] places it at the top of the page.
+    \centering
+    
+    % --- ROW 1 ---
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        % Replace 'figures/...' with the actual path to your saved plots
+        \includegraphics[width=\textwidth]{images/smooth_avg_riemannian_jerk.png}
+        \caption{Average action jerk/jitter (Riemannian computation)}
+        \label{fig:action_jerk}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/smooth_max_ang_accel.png}
+        \caption{Angular Acceleration (Maximum)}
+        \label{fig:max_ang_accel}
+    \end{subfigure}
+    \hfill
+    % \begin{subfigure}[b]{0.32\textwidth}
+    %     \centering
+    %     \includegraphics[width=\textwidth]{figures/condition_number.pdf}
+    %     \caption{Stiffness Condition Number ($\kappa$)}
+    %     \label{fig:cond_num}
+    % \end{subfigure}
+    
+    \vspace{1.5em} % Adds vertical breathing room between the two rows
+    
+    % --- ROW 2 ---
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/smooth_avg_coupling_magnitude.png}
+        \caption{Average Coupling Magnitude}
+        \label{fig:coupling}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/smooth_avg_cond_num.png}
+        \caption{Stiffness Condition Number (Average)}
+        \label{fig:avg_cond_num}
+    \end{subfigure}
+    \hfill
+    % \begin{subfigure}[b]{0.32\textwidth}
+    %     \centering
+    %     \includegraphics[width=\textwidth]{figures/euclidean_jerk.pdf}
+    %     \caption{Euclidean Parameter Jerk}
+    %     \label{fig:eucl_jerk}
+    % \end{subfigure}
+
+    \caption{Quantitative ablation of learned contact dynamics. While all evaluated methods eventually reach comparable wipe completion rates, the underlying physical behaviors differ significantly. The Euclidean baseline exhibits rigid, static behavior, evidenced by its zero coupling (c) and low impedance modulation. Conversely, the Riemannian frameworks (\texttt{FULL\_GRL} and \texttt{SPD\_ONLY}) safely explore the full SPD manifold, evidenced by elevated Riemannian jerk (a), angular acceleration (b), coupling magnitude (c), and condition number (d). }
+    % This enables the emergence of highly anisotropic stiffness profiles (c), continuous dynamic impedance modulation (d), and active force adaptation (e) required for human-like, side-to-side scrubbing mechanics.}
+    \label{fig:metrics_ablation}
+\end{figure*}
+\subsection{Analysis of Smoothness in Wiping Behavior}
+While standard task-success metrics (e.g., wipe percentage) demonstrate convergence across all evaluated methods, the underlying physical contact dynamics differ fundamentally between Euclidean and Riemannian parameterizations. Qualitative analysis of the robot's generated trajectories, corroborated by our geometric smoothness metrics, reveals that the Euclidean baseline converges to a static, rigid policy, whereas the Riemannian-formulated policies (\texttt{FULL\_GRL} and \texttt{SPD\_ONLY}) learn a dynamic, human-like scrubbing behavior.
+
+\subsubsection*{Non-Riemannian Baselines: \texttt{BASELINE} and \texttt{LIE\_ONLY}}
+Qualitative rollouts of the Euclidean baseline reveal a \textit{straight-rigid} motion, where the end-effector attempts to clear stains using minimal, straight-line sweeps. This behavior is strongly reflected in the quantitative data. The baseline exhibits a near-zero average coupling magnitude throughout training, indicating that the policy relies exclusively on a diagonal stiffness matrix $(K_{xy}, K_{xz}, K_{yz} = 0)$. Consequently, the Cartesian axes remain physically decoupled. Furthermore, the baseline's consistently low force standard deviation and low action jerk imply that the agent learns to select a single, safe, static impedance profile. Because exploring a flat Euclidean space without constraints risks violating the positive-definiteness of the stiffness matrix, the baseline agent avoids dynamic impedance modulation entirely, resulting in a physically rigid \textit{dead spring} behavior.
+
+\subsubsection*{Riemannian Impedance Modulation (Active Scrubbing)}
+In contrast, the \texttt{FULL\_GRL} policy exhibits a highly active, \textit{zig-zagging} or side-to-side sweeping motion during table contact. This human-like motion correlates directly with the exploitation of the full $3 \times 3$ Symmetric Positive Definite (SPD) manifold. 
+
+\begin{itemize}
+    \item \textbf{Off-Diagonal Coupling:} The Riemannian policies show a steady ascent in average coupling magnitude, proving the active use of off-diagonal stiffness parameters. This mathematical coupling allows forces applied in the task direction to organically generate orthogonal compliance, naturally inducing the observed side-to-side sweeping mechanics. See Figure \ref{fig:coupling}.
+    \item \textbf{Anisotropic Stiffness:} The condition number ($\kappa$) for the Riemannian policies stabilizes at a significantly higher threshold ($\approx 250$) compared to the baseline ($\approx 50$) as depicted in Figure \ref{fig:avg_cond_num}. This high condition number indicates that the agent has successfully learned a highly anisotropic stiffness ellipsoid---remaining rigid in the wiping direction while maintaining high compliance normal to the surface, preventing excessive force application.
+    \item \textbf{Parameter Agility:} Finally, the elevated Riemannian jerk and force standard deviation in the \texttt{FULL\_GRL} method do not represent unstable noise, but rather high-frequency \textit{impedance modulation}. By guaranteeing that all outputs strictly adhere to the SPD manifold via the exponential map, the Riemannian framework empowers the RL agent to safely and aggressively adjust its stiffness parameters at every control step to actively \textit{scrub} the environment.
+\end{itemize}
+
+In summary, while Euclidean methods learn to statically drag the end-effector to avoid mathematical instability, the Riemannian formulation unlocks safe exploration of the fully coupled parameter space, enabling the emergence of complex, dynamic, and physically compliant robotic skills. 
+
+
+\section{Results}
+
+\section{Conclusion}
+
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
