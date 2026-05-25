@@ -182,3 +182,585 @@ run_pih.sh: line 21: 290416 Segmentation fault      (core dumped) $BASE_CMD --ru
 Running Seed: 0 | Gamma: 0.95
 ==========================================================
 -> Starting: spd_llm0.2_g0.95_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_teleport_curriculum_s0.log
+-> Starting: spd_llm0.4_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_llm0.4_g0.95_teleport_curriculum_s0.log
+-> Starting: spd_g0.95_teleport_curriculum_s0 | Logging to logs/pih/spd_g0.95_teleport_curriculum_s0.log
+🚀 Starting HiRes-VIC Hyperparameter Sweep 🚀
+==========================================================
+Running Seed: 0 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.95_fixedaxis_curriculum_s0.log
+-> Starting: spd_llm0.4_g0.95_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_llm0.4_g0.95_fixedaxis_curriculum_s0.log
+-> Starting: spd_g0.95_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_g0.95_fixedaxis_curriculum_s0.log
+==========================================================
+Running Seed: 0 | Gamma: 0.90
+==========================================================
+-> Starting: spd_llm0.2_g0.90_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.90_fixedaxis_curriculum_s0.log
+-> Starting: spd_llm0.4_g0.90_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_llm0.4_g0.90_fixedaxis_curriculum_s0.log
+-> Starting: spd_g0.90_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_g0.90_fixedaxis_curriculum_s0.log
+==========================================================
+Running Seed: 0 | Gamma: 0.99
+==========================================================
+-> Starting: spd_llm0.2_g0.99_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_llm0.2_g0.99_fixedaxis_curriculum_s0.log
+-> Starting: spd_llm0.4_g0.99_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_llm0.4_g0.99_fixedaxis_curriculum_s0.log
+-> Starting: spd_g0.99_fixedaxis_curriculum_s0 | Logging to logs/pih/spd_g0.99_fixedaxis_curriculum_s0.log
+==========================================================
+Running Seed: 1 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_llm0.2_g0.95_fixedaxis_curriculum_s1.log
+-> Starting: spd_llm0.4_g0.95_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_llm0.4_g0.95_fixedaxis_curriculum_s1.log
+-> Starting: spd_g0.95_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_g0.95_fixedaxis_curriculum_s1.log
+==========================================================
+Running Seed: 1 | Gamma: 0.90
+==========================================================
+-> Starting: spd_llm0.2_g0.90_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_llm0.2_g0.90_fixedaxis_curriculum_s1.log
+-> Starting: spd_llm0.4_g0.90_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_llm0.4_g0.90_fixedaxis_curriculum_s1.log
+-> Starting: spd_g0.90_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_g0.90_fixedaxis_curriculum_s1.log
+==========================================================
+Running Seed: 1 | Gamma: 0.99
+==========================================================
+-> Starting: spd_llm0.2_g0.99_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_llm0.2_g0.99_fixedaxis_curriculum_s1.log
+-> Starting: spd_llm0.4_g0.99_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_llm0.4_g0.99_fixedaxis_curriculum_s1.log
+-> Starting: spd_g0.99_fixedaxis_curriculum_s1 | Logging to logs/pih/spd_g0.99_fixedaxis_curriculum_s1.log
+==========================================================
+Running Seed: 2 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_llm0.2_g0.95_fixedaxis_curriculum_s2.log
+-> Starting: spd_llm0.4_g0.95_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_llm0.4_g0.95_fixedaxis_curriculum_s2.log
+-> Starting: spd_g0.95_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_g0.95_fixedaxis_curriculum_s2.log
+==========================================================
+Running Seed: 2 | Gamma: 0.90
+==========================================================
+-> Starting: spd_llm0.2_g0.90_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_llm0.2_g0.90_fixedaxis_curriculum_s2.log
+-> Starting: spd_llm0.4_g0.90_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_llm0.4_g0.90_fixedaxis_curriculum_s2.log
+-> Starting: spd_g0.90_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_g0.90_fixedaxis_curriculum_s2.log
+==========================================================
+Running Seed: 2 | Gamma: 0.99
+==========================================================
+-> Starting: spd_llm0.2_g0.99_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_llm0.2_g0.99_fixedaxis_curriculum_s2.log
+-> Starting: spd_llm0.4_g0.99_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_llm0.4_g0.99_fixedaxis_curriculum_s2.log
+-> Starting: spd_g0.99_fixedaxis_curriculum_s2 | Logging to logs/pih/spd_g0.99_fixedaxis_curriculum_s2.log
+==========================================================
+Running Seed: 3 | Gamma: 0.95
+==========================================================
+-> Starting: spd_llm0.2_g0.95_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_llm0.2_g0.95_fixedaxis_curriculum_s3.log
+-> Starting: spd_llm0.4_g0.95_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_llm0.4_g0.95_fixedaxis_curriculum_s3.log
+-> Starting: spd_g0.95_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_g0.95_fixedaxis_curriculum_s3.log
+==========================================================
+Running Seed: 3 | Gamma: 0.90
+==========================================================
+-> Starting: spd_llm0.2_g0.90_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_llm0.2_g0.90_fixedaxis_curriculum_s3.log
+-> Starting: spd_llm0.4_g0.90_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_llm0.4_g0.90_fixedaxis_curriculum_s3.log
+-> Starting: spd_g0.90_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_g0.90_fixedaxis_curriculum_s3.log
+==========================================================
+Running Seed: 3 | Gamma: 0.99
+==========================================================
+-> Starting: spd_llm0.2_g0.99_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_llm0.2_g0.99_fixedaxis_curriculum_s3.log
+-> Starting: spd_llm0.4_g0.99_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_llm0.4_g0.99_fixedaxis_curriculum_s3.log
+-> Starting: spd_g0.99_fixedaxis_curriculum_s3 | Logging to logs/pih/spd_g0.99_fixedaxis_curriculum_s3.log
+🎉 Sweep Complete! Check WandB for the glorious curves.
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 01:41:21 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 01:43:32 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 13:57:09 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=0
+All NutAssemblySquare experiments queued. Waiting for jobs to finish...
+✅ NutAssemblySquare experiments completed (jobs finished).
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 14:00:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=0
+All NutAssemblySquare experiments queued. Waiting for jobs to finish...
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1000000 steps...
+Date: dom 24 may 2026 15:31:39 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=0
+All NutAssemblySquare experiments queued. Waiting for jobs to finish...
+✅ NutAssemblySquare experiments completed (jobs finished).
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:38:57 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.95 | SEED=0
+All NutAssemblySquare experiments queued. Waiting for jobs to finish...
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 15:41:25 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 17:45:55 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 19:51:18 CEST
+==================================================
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 21:27:03 CEST
+==================================================
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 24 may 2026 23:34:02 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 01:40:19 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 03:46:44 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 05:56:28 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 08:01:54 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 10:11:52 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 12:16:41 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.95 | SEED=0
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 25 may 2026 12:16:44 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.95 | SEED=0
+All NutAssemblySquare experiments queued. Waiting for jobs to finish...
+✅ NutAssemblySquare experiments completed (jobs finished).
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:00 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:01 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_FULL_GRL_KP1_300_GAMMA0.99 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:01 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_SPD_ONLY_KP1_300_GAMMA0.99 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:01 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.99 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:45:01 CEST
+==================================================
+Launched: NutAssemblySquare | NUT_SQ_BASELINE_KP1_300_GAMMA0.99 | SEED=1
+All NutAssemblySquare experiments queued. Waiting for jobs to finish...
+✅ NutAssemblySquare experiments completed (jobs finished).
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:46:30 CEST
+==================================================
+==================================================
+Starting SAC on NutAssemblySquare for 3_000_000 steps...
+Date: lun 25 may 2026 14:47:12 CEST
+==================================================

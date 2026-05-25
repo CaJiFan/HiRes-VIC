@@ -33,6 +33,7 @@ import argparse
 import random
 import time
 import math
+from tqdm import tqdm
 from collections import deque
 from pathlib import Path
 
@@ -48,7 +49,7 @@ from torch.distributions import Normal
 import gymnasium as gym
 import wandb
 
-from hires_vic.wrappers.pih_curriculum import InsertionCurriculumWrapper
+from hires_vic.wrappers.pih_curriculum import InsertionCurriculumWrapper, ManiskillTeleportWrapper
 
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ def parse_args():
     p.add_argument("--llm_model",          default=None)
     p.add_argument("--llm_query_interval", type=int,   default=50)
     p.add_argument("--llm_prior_weight",   type=float, default=0.4)
-    p.add_argument("--llm_profile",        default="configs/pih_impedance_profile.yaml",
+    p.add_argument("--llm_profile",        default="configs/nutassembly_robosuite_impedance_profile.yaml",
                    help="Path to YAML impedance profile for this task")
 
     # SAC hyperparameters
@@ -112,7 +113,7 @@ def parse_args():
     p.add_argument("--log_freq",        type=int, default=10_000)
     p.add_argument("--record_video",      action="store_true",
                    help="Record one eval episode as wandb video at each eval checkpoint")
-    p.add_argument("--max_episode_steps", type=int, default=200,
+    p.add_argument("--max_episode_steps", type=int, default=100,
                    help="Max steps per episode (ManiSkill default is 100; 300 recommended for PiH)")
     p.add_argument("--video_fps",       type=int, default=20)
 
@@ -314,7 +315,8 @@ def make_envs(args, is_eval=False):
         render_mode=None,
     )
 
-    env = InsertionCurriculumWrapper(env, setup_steps=90)
+    # env = InsertionCurriculumWrapper(env, setup_steps=90)
+    env = ManiskillTeleportWrapper(env, setup_steps=15)
 
     # PiH task metrics: insertion depth from env info (populated by ManiSkill)
     def pih_task_metrics_fn(env, info):
@@ -426,112 +428,111 @@ def train_sac(args, device: torch.device, video_env=None):
     ep_lengths  = deque(maxlen=100)
     start_time  = time.time()
 
-    while global_step < args.total_timesteps:
-        # ── Collect experience ────────────────────────────────────────────────
-        if global_step < args.learning_starts:
-            # actions = np.array(
-            #     [envs.action_space.sample() for _ in range(args.n_envs)]
-            # )
-            actions = torch.rand((args.n_envs, action_dim), dtype=torch.float32, device=device) * 2.0 - 1.0
-        else:
-            with torch.no_grad():
-                actions, _, _ = actor.get_action(obs)
-            # actions = actions.cpu().numpy()
-
-        next_obs, rewards, terminated, truncated, infos = envs.step(actions)
-        if global_step == args.learning_starts:
-            print("\n" + "="*55)
-            print("🚀 ZERO-COPY GPU PHYSICS VERIFICATION 🚀")
-            print(f"1. Action Tensor Device:    {actions.device}")
-            print(f"2. Raw Obs Output Type:     {type(next_obs)}")
-            if isinstance(next_obs, torch.Tensor):
-                print(f"3. Raw Obs Output Device:   {next_obs.device}")
-            if isinstance(rewards, torch.Tensor):
-                print(f"4. Reward Tensor Device:    {rewards.device}")
-            print("="*55 + "\n")
-        dones = torch.logical_or(terminated, truncated).float()
-        # next_obs_t = _to_tensor(next_obs, device)
-
-        rb.add(obs, next_obs, actions, rewards, dones)
-        obs = next_obs
-        # obs = next_obs
-        global_step += args.n_envs
-
-        # Episode stats
-        if "episode" in infos:
-            ep_info = infos["episode"]
-            _r = _to_numpy(ep_info["r"])
-            _l = _to_numpy(ep_info["l"])
-            ep_returns.extend(_r.tolist())
-            ep_lengths.extend(_l.tolist())
-
-        log_episode_metrics(infos, global_step)
-
-        # ── Update networks ───────────────────────────────────────────────────
-        if global_step < args.learning_starts or global_step % args.train_freq != 0:
-            continue
-
-        for _ in range(args.gradient_steps):
-            obs_b, next_obs_b, act_b, rew_b, done_b = rb.sample(args.batch_size)
-
-            # Critic update
-            with torch.no_grad():
-                next_a, next_log_pi, _ = actor.get_action(next_obs_b)
-                q1_next = qf1_tgt(next_obs_b, next_a)
-                q2_next = qf2_tgt(next_obs_b, next_a)
-                min_q_next = torch.min(q1_next, q2_next) - alpha * next_log_pi
-                target_q = rew_b + (1 - done_b) * args.gamma * min_q_next
-
-            qf1_loss = F.mse_loss(qf1(obs_b, act_b), target_q)
-            qf2_loss = F.mse_loss(qf2(obs_b, act_b), target_q)
-            qf_loss  = qf1_loss + qf2_loss
-
-            q_opt.zero_grad()
-            qf_loss.backward()
-            q_opt.step()
-
-            # Actor update
-            pi, log_pi, _ = actor.get_action(obs_b)
-            min_q_pi = torch.min(qf1(obs_b, pi), qf2(obs_b, pi))
-            actor_loss = (alpha * log_pi - min_q_pi).mean()
-
-            a_opt.zero_grad()
-            actor_loss.backward()
-            a_opt.step()
-
-            # Alpha update
-            if args.autotune_alpha:
+    with tqdm(total=args.total_timesteps, desc="SAC Training", unit="step") as pbar:
+        while global_step < args.total_timesteps:
+            # ── Collect experience ────────────────────────────────────────────────
+            if global_step < args.learning_starts:
+                actions = torch.rand((args.n_envs, action_dim), dtype=torch.float32, device=device) * 2.0 - 1.0
+            else:
                 with torch.no_grad():
-                    _, log_pi, _ = actor.get_action(obs_b)
-                alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
-                alpha_opt.zero_grad()
-                alpha_loss.backward()
-                alpha_opt.step()
-                alpha = log_alpha.exp().item()
+                    actions, _, _ = actor.get_action(obs)
 
-            # Soft target update (τ = args.tau)
-            for p, tp in zip(qf1.parameters(), qf1_tgt.parameters()):
-                tp.data.copy_(args.tau * p.data + (1 - args.tau) * tp.data)
-            for p, tp in zip(qf2.parameters(), qf2_tgt.parameters()):
-                tp.data.copy_(args.tau * p.data + (1 - args.tau) * tp.data)
+            next_obs, rewards, terminated, truncated, infos = envs.step(actions)
+            if global_step == args.learning_starts:
+                print("\n" + "="*55)
+                print("🚀 ZERO-COPY GPU PHYSICS VERIFICATION 🚀")
+                print(f"1. Action Tensor Device:    {actions.device}")
+                print(f"2. Raw Obs Output Type:     {type(next_obs)}")
+                if isinstance(next_obs, torch.Tensor):
+                    print(f"3. Raw Obs Output Device:   {next_obs.device}")
+                if isinstance(rewards, torch.Tensor):
+                    print(f"4. Reward Tensor Device:    {rewards.device}")
+                print("="*55 + "\n")
+            dones = torch.logical_or(terminated, truncated).float()
 
-        # ── Periodic logging ──────────────────────────────────────────────────
-        if global_step % args.log_freq == 0 and ep_returns:
-            sps = int(global_step / (time.time() - start_time))
-            wandb.log({
-                "train/mean_episode_return": np.mean(ep_returns),
-                "train/mean_episode_length": np.mean(ep_lengths),
-                "train/actor_loss":  actor_loss.item(),
-                "train/critic_loss": qf_loss.item(),
-                "train/alpha":       alpha,
-                "charts/SPS":        sps,
-            }, step=global_step)
+            rb.add(obs, next_obs, actions, rewards, dones)
+            obs = next_obs
 
-        # ── Evaluation ───────────────────────────────────────────────────────
-        if global_step % args.eval_freq < args.n_envs:
-            _run_eval(actor, eval_envs, device, global_step, args.n_eval_episodes)
-            if video_env is not None:
-                record_video_probe(actor, video_env, device, global_step, fps=args.video_fps)
+            global_step += args.n_envs
+            pbar.update(args.n_envs)
+
+            # Episode stats
+            if "episode" in infos:
+                ep_info = infos["episode"]
+                _r = _to_numpy(ep_info["r"])
+                _l = _to_numpy(ep_info["l"])
+                ep_returns.extend(_r.tolist())
+                ep_lengths.extend(_l.tolist())
+
+            log_episode_metrics(infos, global_step)
+
+            # ── Update networks ───────────────────────────────────────────────────
+            if global_step < args.learning_starts or global_step % args.train_freq != 0:
+                continue
+
+            for _ in range(args.gradient_steps):
+                obs_b, next_obs_b, act_b, rew_b, done_b = rb.sample(args.batch_size)
+
+                # Critic update
+                with torch.no_grad():
+                    next_a, next_log_pi, _ = actor.get_action(next_obs_b)
+                    q1_next = qf1_tgt(next_obs_b, next_a)
+                    q2_next = qf2_tgt(next_obs_b, next_a)
+                    min_q_next = torch.min(q1_next, q2_next) - alpha * next_log_pi
+                    target_q = rew_b + (1 - done_b) * args.gamma * min_q_next
+
+                qf1_loss = F.mse_loss(qf1(obs_b, act_b), target_q)
+                qf2_loss = F.mse_loss(qf2(obs_b, act_b), target_q)
+                qf_loss  = qf1_loss + qf2_loss
+
+                q_opt.zero_grad()
+                qf_loss.backward()
+                q_opt.step()
+
+                # Actor update
+                pi, log_pi, _ = actor.get_action(obs_b)
+                min_q_pi = torch.min(qf1(obs_b, pi), qf2(obs_b, pi))
+                actor_loss = (alpha * log_pi - min_q_pi).mean()
+
+                a_opt.zero_grad()
+                actor_loss.backward()
+                a_opt.step()
+
+                # Alpha update
+                if args.autotune_alpha:
+                    with torch.no_grad():
+                        _, log_pi, _ = actor.get_action(obs_b)
+                    alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+                    alpha_opt.zero_grad()
+                    alpha_loss.backward()
+                    alpha_opt.step()
+                    alpha = log_alpha.exp().item()
+
+                # Soft target update (τ = args.tau)
+                for p, tp in zip(qf1.parameters(), qf1_tgt.parameters()):
+                    tp.data.copy_(args.tau * p.data + (1 - args.tau) * tp.data)
+                for p, tp in zip(qf2.parameters(), qf2_tgt.parameters()):
+                    tp.data.copy_(args.tau * p.data + (1 - args.tau) * tp.data)
+
+            # ── Periodic logging ──────────────────────────────────────────────────
+            if global_step % args.log_freq == 0 and ep_returns:
+                sps = int(global_step / (time.time() - start_time))
+                pbar.set_postfix(Ret=f"{np.mean(ep_returns):.1f}", SPS=sps)
+
+                wandb.log({
+                    "train/mean_episode_return": np.mean(ep_returns),
+                    "train/mean_episode_length": np.mean(ep_lengths),
+                    "train/actor_loss":  actor_loss.item(),
+                    "train/critic_loss": qf_loss.item(),
+                    "train/alpha":       alpha,
+                    "charts/SPS":        sps,
+                }, step=global_step)
+
+            # ── Evaluation ───────────────────────────────────────────────────────
+            if global_step % args.eval_freq < args.n_envs:
+                _run_eval(actor, eval_envs, device, global_step, args.n_eval_episodes)
+                if video_env is not None:
+                    record_video_probe(actor, video_env, device, global_step, fps=args.video_fps)
 
     # Final save
     save_dir = Path("outputs/models")
@@ -705,6 +706,10 @@ def make_video_env(args):
         render_mode="rgb_array",
         max_episode_steps=args.max_episode_steps,
     )
+    
+    # env = InsertionCurriculumWrapper(env, setup_steps=90)
+    env = ManiskillTeleportWrapper(env, setup_steps=15)
+
     env = ManiSkillRiemannianWrapper(
         env,
         use_spd=args.use_spd,

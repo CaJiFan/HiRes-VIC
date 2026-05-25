@@ -501,6 +501,8 @@ class ManiSkillRiemannianWrapper(gym.Wrapper):
         # ── Riemannian delta_pos scaling ─────────────────────────────────────
         native_scaled = self._apply_riemannian_scaling(kp_matrix, native_action)
 
+        native_scaled[..., -1] = -1.0
+
         # ── Physics step ─────────────────────────────────────────────────────
         _, reward, terminated, truncated, info = self.env.step(native_scaled)
         self._episode_steps += 1

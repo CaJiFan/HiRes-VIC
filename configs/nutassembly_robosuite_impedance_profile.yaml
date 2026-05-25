@@ -1,0 +1,48 @@
+task: PegInsertionSide-v1 (Robosuite)
+robot: Panda
+description: >
+  Peg-in-hole insertion adapted for Robosuite experiments. This profile assumes
+  the insertion axis is vertical (robot local +Z). Values are tuned to make
+  the insertion axis compliant during alignment and stiff during insertion,
+  with lateral axes remaining more compliant to avoid jamming.
+
+phases:
+  align:
+    # X (Left/Right) = 80.0 (Stiff)
+    # Y (Forward/Backward) = 80.0 (Stiff)
+    # Z (Up/Down / Insertion) = 20.0 (Compliant)
+    kp_trans: [80.0, 80.0, 20.0]
+    kp_rot:   [30.0, 30.0, 10.0]
+    description: "Alignment: compliant along the vertical insertion axis (Z) to softly find the opening; stiff in X/Y for centering"
+
+  insert:
+    # X = 25.0 (Compliant lateral)
+    # Y = 25.0 (Compliant lateral)
+    # Z = 90.0 (Stiff insertion axis)
+    kp_trans: [25.0, 25.0, 90.0]
+    kp_rot:   [15.0, 15.0, 23.0]
+    description: "Insertion: stiff along Z to make depth progress; compliant in X/Y to allow small lateral motions to avoid jamming"
+
+  seated:
+    # X/Y moderate, Z very stiff to seat fully
+    kp_trans: [50.0, 50.0, 150.0]
+    kp_rot:   [20.0, 25.0, 25.0]
+    description: "Seating: firm along Z to press fully to depth, moderate elsewhere"
+
+planner_prompt: |
+  You are an impedance control expert for a robot performing a peg-in-hole insertion
+  in Robosuite. IMPORTANT: Robosuite returns poses in the robot/base/world frame by
+  default; interpret EEF and object poses accordingly.
+
+  CRITICAL CONTEXT: The insertion axis for the task is the robot's LOCAL +Z axis
+  (vertical). Use the following impedance phases:
+
+    align  – peg tip near the hole opening. Use low stiffness along Z to softly
+             probe the opening while holding X/Y to center.
+    insert – peg partially inserted. Use high stiffness along Z to push into depth
+             while allowing compliance in X/Y to prevent jamming.
+    seated – peg nearly fully inserted. Use high stiffness along Z to seat to full
+             depth and moderate stiffness elsewhere.
+
+  You will receive: EEF pose (in robot frame), contact indicators, and any
+  available insertion depth estimate. Respond with ONLY the chosen phase name.

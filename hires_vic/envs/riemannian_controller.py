@@ -22,8 +22,7 @@ class RiemannianController(OperationalSpaceController):
             self.kd_pos_matrix = np.zeros((3, 3))
             self.kp_ori_array = np.zeros(3)
             self.kd_ori_array = np.zeros(3)
-
-        print(f'🔧 Riemannian Controller initialized! Mode: {self.impedance_mode}')
+        # print(f'🔧 Riemannian Controller initialized! Mode: {self.impedance_mode}')
 
     def set_goal(self, action):
         if self.is_riemannian:

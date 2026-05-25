@@ -1,45 +1,70 @@
 #!/bin/bash
 
-# Define a function to run training so we don't repeat code
-TASK="NutAssemblySquare"
+#!/bin/bash
+
+# Run NutAssemblySquare experiments using src/train_fixed.py
 run_train() {
     ENV_NAME=$1
-    ALGO=$2
-    STEPS=$3
-    SEED=$4
-    USE_GRL="TRUE"
-    USE_LG="TRUE"
-    EXP_NAME="VIC_GRL_${USE_GRL}_LG_${USE_LG}_SEED_${SEED}"
-    
+    USE_SPD=$2
+    USE_LG=$3
+    STEPS=$4
+    EXP_NAME=$5
+    SEED=$6
+
     echo "=================================================="
-    echo "Starting $ALGO on $ENV_NAME for $STEPS steps..."
+    echo "Starting SAC on $ENV_NAME for $STEPS steps..."
     echo "Date: $(date)"
     echo "=================================================="
 
-    # Run Python script
-    # > logs/... saves the text output to a file
-    # 2>&1 captures errors too
-    python3 scripts/train.py \
-        --env $ENV_NAME \
-        --algorithm $ALGO \
-        --total_timesteps $STEPS \
-        --run_name $EXP_NAME \
-        --seed $SEED \
-        > logs/${ENV_NAME}_${ALGO}_${EXP_NAME}.log 2>&1
-    
-    echo "Finished $ALGO on $ENV_NAME"
+    ARGS=(
+        python3 src/train_fixed.py
+        --env "$ENV_NAME"
+        --run_name "$EXP_NAME"
+        --total_timesteps "$STEPS"
+        --seed "$SEED"
+        --gamma "$GAMMA"
+        --record_video
+    )
+
+    if [ "$USE_SPD" == "TRUE" ]; then
+        ARGS+=(--use_spd)
+    fi
+    if [ "$USE_SPD" == "FIXED" ]; then
+        ARGS+=(--use_fixed)
+    fi
+    if [ "$USE_LG" == "TRUE" ]; then
+        ARGS+=(--use_lie)
+    fi
+
+    mkdir -p logs
+    "${ARGS[@]}" > "logs/${ENV_NAME}_SAC_${EXP_NAME}_SEED_${SEED}.log" 2>&1
+    echo "Launched: ${ENV_NAME} | ${EXP_NAME} | SEED=${SEED}"
 }
 
-# Create logs directory if it doesn't exist
-mkdir -p logs
+wait_for_queue() {
+    while [ $(jobs -p | wc -l) -ge 1 ]; do
+        sleep 10
+    done
+}
 
-# --- 1. Door (Baseline) ---
-for SEED in 1 2 3
-do
-    # run_train $TASK "PPO" 5_000_000
-    # run_train $TASK "SAC" 5_000_000
-    run_train $TASK "TQC" 5_000_000 $SEED
+TASK="NutAssemblySquare"
+GAMMA=0.99
+STEPS=3_000_000
 
+for SEED in 3 2 1; do
+    # wait_for_queue
+    run_train $TASK "TRUE" "TRUE" $STEPS "NUT_SQ_FULL_GRL_KP1_300_GAMMA${GAMMA}" $SEED
+
+    # wait_for_queue
+    run_train $TASK "TRUE" "FALSE" $STEPS "NUT_SQ_SPD_ONLY_KP1_300_GAMMA${GAMMA}" $SEED
+
+    # wait_for_queue
+    run_train $TASK "FALSE" "TRUE" $STEPS "NUT_SQ_LIE_ONLY_KP1_300_GAMMA${GAMMA}" $SEED
+
+    # # wait_for_queue
+    run_train $TASK "FALSE" "FALSE" $STEPS "NUT_SQ_BASELINE_KP1_300_GAMMA${GAMMA}" $SEED
 done
 
-echo "All Door experiments completed!"
+echo "All NutAssemblySquare experiments queued. Waiting for jobs to finish..."
+wait
+echo "✅ NutAssemblySquare experiments completed (jobs finished)."

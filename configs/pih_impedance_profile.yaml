@@ -6,8 +6,8 @@
 #   kp_rot:   rotational stiffness             [Kx, Ky, Kz]  (N·m/rad, range 1–300)
 #
 # PiH task geometry (PegInsertionSide-v1):
-#   - Insertion axis: roughly +Y in EEF task space
-#   - Lateral axes: XY — need compliance to absorb jamming
+#   - Insertion axis: Local +X in EEF task space (Forward out of gripper)
+#   - Lateral axes: Local YZ — need compliance to absorb jamming (Left/Right, Up/Down)
 #   - Peg is on the robot EEF; hole is world-fixed
 
 task: PegInsertionSide-v1
@@ -19,19 +19,26 @@ description: >
 
 phases:
   align:
-    kp_trans: [80.0, 20.0, 80.0]
-    kp_rot:   [30.0, 10.0, 30.0]
-    description: "Alignment: stiffen XZ for precise hole centering, compliant along insertion axis Y to feel the opening"
+    # X (Forward) = 20.0 (Compliant, to gently feel the wall/chamfer)
+    # Y (Left/Right) = 80.0 (Stiff, to hold lateral position)
+    # Z (Up/Down) = 80.0 (Stiff, to hold vertical position)
+    kp_trans: [20.0, 80.0, 80.0]
+    kp_rot:   [10.0, 30.0, 30.0]
+    description: "Alignment: compliant along insertion axis X to feel the opening, stiffen YZ for precise hole centering"
 
   insert:
-    kp_trans: [25.0, 90.0, 25.0]
-    kp_rot:   [15.0, 23.0, 15.0]
-    description: "Insertion: highly compliant XZ to absorb jamming and wedging, stiff along Y for depth progress"
+    # X (Forward) = 90.0 (Stiff, push aggressively into the hole)
+    # Y (Left/Right) = 25.0 (Compliant, let the peg wiggle sideways to avoid jamming)
+    # Z (Up/Down) = 25.0 (Compliant, let the peg wiggle vertically to avoid jamming)
+    kp_trans: [90.0, 25.0, 25.0]
+    kp_rot:   [23.0, 15.0, 15.0]
+    description: "Insertion: stiff along X for depth progress, highly compliant YZ to absorb jamming and wedging"
 
   seated:
-    kp_trans: [50.0, 150.0, 50.0]
+    # X (Forward) = 150.0 (Maximum stiffness to fully seat the peg)
+    kp_trans: [150.0, 50.0, 50.0]
     kp_rot:   [25.0, 20.0, 25.0]
-    description: "Seating: very stiff along Y to press peg to full insertion depth, moderate stiffness elsewhere"
+    description: "Seating: very stiff along X to press peg to full insertion depth, moderate stiffness elsewhere"
 
 # System prompt injected into the runtime LLMImpedancePlanner for this task.
 planner_prompt: |
@@ -44,15 +51,16 @@ planner_prompt: |
   The episode begins with the peg ALREADY GRASPED and positioned right next to the hole. 
   Your ONLY job is to guide the alignment and insertion using contact forces.
 
-  The insertion axis is roughly along the robot's Y-axis in task space.
+  The insertion axis is exactly along the robot's LOCAL +X-axis in task space (straight out of the gripper).
+  The lateral axes are local Y (left/right) and local Z (up/down).
 
   At each query you receive: EEF position, peg head position relative to the hole,
   whether the peg is in contact, and the current insertion depth. Select the best
   impedance mode for the current phase.
 
   Available modes:
-    align    – peg tip near the hole opening, fine lateral positioning required to find the center
-    insert   – peg partially inserted, guiding along the insertion axis while remaining compliant to avoid jamming
-    seated   – peg nearly fully inserted, pressing firmly to final depth
+    align    – peg tip near the hole opening, gently pushing forward (X) while maintaining lateral position (YZ) to find the center
+    insert   – peg partially inserted, pushing stiffly along the insertion axis (X) while remaining highly compliant laterally (YZ) to avoid jamming
+    seated   – peg nearly fully inserted, pressing firmly along X to final depth
 
   Respond with ONLY the mode name, nothing else.

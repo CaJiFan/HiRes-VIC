@@ -25,7 +25,7 @@ class GeometricWrapper(gym.Wrapper):
         llm_backend="ollama",
         llm_query_interval=50,
         llm_prior_weight=0.4,
-        task_type="wipe",
+        task_type=None,
         task_metrics_fn=None,
     ):
         super().__init__(env)
@@ -96,7 +96,7 @@ class GeometricWrapper(gym.Wrapper):
         action_dim = 6 if self.use_fixed else 12
         action_dim += 3 if self.use_spd_manifold else 0
         
-        gripper_dim = self.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
+        gripper_dim = self.env.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
         if gripper_dim > 0:
             action_dim += gripper_dim
 
@@ -122,31 +122,76 @@ class GeometricWrapper(gym.Wrapper):
         Applies Lie Group Logarithmic Map to orientation if using GRL.
         """
         raw_obs = self.env.unwrapped._get_observations()
-        self._last_obs_dict = raw_obs  # cache for LLM planner query on next step
-        proprio_state_keys = [
-            'robot0_joint_pos', 'robot0_joint_pos_cos', 'robot0_joint_pos_sin',
-            'robot0_joint_vel', 'robot0_joint_acc', 'robot0_eef_pos', 'robot0_eef_quat', 
-            'robot0_eef_quat_site', 'robot0_gripper_qpos', 'robot0_gripper_qvel', 'robot0_contact'
-        ]
-        # print(f'initial obs ({len(obs[0])}) {obs}')
-        
-        object_state = np.array(raw_obs['object-state']).flatten()
-        proprio_state = []
-        
-        for key in proprio_state_keys:
-            if 'quat' in key and self.use_lie_group:
-                quat = raw_obs[key]
-                rot_mat = T.quat2mat(quat)
-                rot_tensor = torch.tensor(rot_mat, dtype=torch.float32).unsqueeze(0)
-                
-                # log map: SO(3) Manifold -> so(3) TxM Lie Algebra
-                omega = so3_log_map(rot_tensor).squeeze(0).detach().numpy() 
-                proprio_state.append(omega)
-            else:
-                proprio_state.append(np.array(raw_obs[key]).flatten())
-        
+        # Cache the full raw observation dict for planner/inspection
+        self._last_obs_dict = raw_obs
 
-        return np.concatenate([object_state] + proprio_state).astype(np.float32)
+        # Make a shallow copy and defensively remove large camera/image entries
+        raw_obs_c = raw_obs.copy()
+        raw_obs_c.pop('robot0_proprio-state', None)
+        raw_obs_c.pop('object-state', None)
+        all_keys = list(raw_obs_c.keys())
+
+        # if self.is_eval:
+            # print("🔍 Raw observation keys:\n", all_keys)
+        # else:
+            # print("🔍 Raw observation keys (Training):\n", all_keys)
+
+        # Exclude common camera/image keys that would massively increase the flat obs size
+        skip_substrings = ('image', 'camera', 'rgb', 'frontview', 'agentview', 'render', 'depth')
+        filtered_keys = [k for k in all_keys if not any(sub in k.lower() for sub in skip_substrings)]
+
+        new_obs = []
+        for key in filtered_keys:
+            try:
+                val = raw_obs_c.get(key)
+                if val is None:
+                    continue
+
+                if 'quat' in key and self.use_lie_group:
+                    quat = np.asarray(val, dtype=np.float32)
+                    # Normalize quaternion to avoid numeric issues
+                    norm = np.linalg.norm(quat)
+                    if norm < 1e-8:
+                        quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+                    else:
+                        quat = quat / norm
+                    rot_mat = T.quat2mat(quat)
+                    rot_tensor = torch.tensor(rot_mat, dtype=torch.float32).unsqueeze(0)
+                    omega = so3_log_map(rot_tensor).squeeze(0).detach().numpy()
+                    new_obs.append(omega)
+                else:
+                    arr = np.asarray(val).flatten()
+                    # Extra safety: skip extremely large arrays
+                    if arr.size > 200000:
+                        continue
+                    new_obs.append(arr)
+            except Exception:
+                # Best-effort: ignore keys that fail to flatten
+                continue
+
+        # Fallbacks: try to construct something usable if filtered produced nothing
+        if not new_obs:
+            try:
+                parts = []
+                for k, v in raw_obs.items():
+                    if any(sub in k.lower() for sub in skip_substrings):
+                        continue
+                    parts.append(np.asarray(v).flatten())
+                if parts:
+                    return np.concatenate(parts).astype(np.float32)
+            except Exception:
+                pass
+
+            # Final fallback: if `obs` param looks like a numpy array, return its flattened form
+            try:
+                param = obs
+                if isinstance(param, (list, tuple)):
+                    param = param[0]
+                return np.asarray(param).flatten().astype(np.float32)
+            except Exception:
+                return np.zeros((0,), dtype=np.float32)
+
+        return np.concatenate(new_obs).astype(np.float32)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -217,8 +262,10 @@ class GeometricWrapper(gym.Wrapper):
                 action[9:],             # pos + ori + gripper
             ])
             physical_kp_vals = np.concatenate([np.diag(kp_matrix), kp_rot_scaled])
+            
             kp_matrix_3x3 = kp_matrix
         elif self.use_diag_manifold:
+            print('using spd manifold')
             kp_raw = action[:6].copy()
             log_min, log_max = np.log(self.min_kp), np.log(self.max_kp)
             
@@ -250,6 +297,14 @@ class GeometricWrapper(gym.Wrapper):
             physical_kp_vals = robosuite_action[:6]
             kp_matrix_3x3 = np.diag(physical_kp_vals[:3])
 
+        # print('physical_kp_vals: ', physical_kp_vals)
+        # check if the env uses a gripper and if so set it to always closed (1.0). The criteria is that if the name is not a wiping
+        # env, then we assume it has a gripper that needs to be closed. Allow temporary suppression (e.g., scripted primitives)
+        suppress = getattr(self, 'suppress_forced_gripper', False)
+        if 'wipe' not in self.env.unwrapped.__class__.__name__.lower() and not suppress:
+            robosuite_action[-1] = 1.0
+            
+        # print('Action after processing:', robosuite_action)
         step_return = self.env.step(robosuite_action)
         self.episode_steps += 1
        
@@ -315,10 +370,6 @@ class GeometricWrapper(gym.Wrapper):
 
         if self.is_eval:
             self.kp_history.append(physical_kp_vals.copy())
-        
-        raw_obs = self.env.unwrapped._get_observations()
-        contact = bool(raw_obs["robot0_contact"])
-        self.episode_contact_steps += int(contact)
 
         self.log_contact_forces()
         self.check_joint_violations()
@@ -344,7 +395,7 @@ class GeometricWrapper(gym.Wrapper):
             info["physics/kp_rot_x_avg"] = self.ep_kp_rot_x / max(1, self.episode_steps)
             info["physics/kp_rot_y_avg"] = self.ep_kp_rot_y / max(1, self.episode_steps)
             info["physics/kp_rot_z_avg"] = self.ep_kp_rot_z / max(1, self.episode_steps)
-            info["physics/contact_step_ratio"] = self.episode_contact_steps / max(1, self.episode_steps)
+            
             
             # Attach to info dict for SB3 to catch
             info['smoothness/avg_cond_num'] = np.mean(self.cond_num_history) if self.cond_num_history else 0
@@ -367,24 +418,37 @@ class GeometricWrapper(gym.Wrapper):
                     "eval/kp_rot_x_avg": eval_kp_avgs[3],
                     "eval/kp_rot_y_avg": eval_kp_avgs[4],
                     "eval/kp_rot_z_avg": eval_kp_avgs[5],
-                    # "eval/contact_step_ratio": self.episode_contact_steps / max(1, self.episode_steps)
                 })
             
-            if self.task_type == "wipe":
-                if hasattr(self.env.env, 'num_markers') and hasattr(self.env.env, 'wiped_markers'):
-                    total_markers = self.env.env.num_markers
-                    wiped_markers = len(self.env.env.wiped_markers)
-                    percent_wiped = wiped_markers / total_markers if total_markers > 0 else 0
-                    info["physics/raw_wipe_percentage"] = percent_wiped
-
-                    if self.is_eval and len(self.kp_history) > 0:
-                        print(f"Eval | Total Markers: {total_markers} | Wiped Markers: {wiped_markers} | % Wiped: {percent_wiped:.2%}")
-                        wandb.log({"eval/raw_wipe_percentage": percent_wiped})
-
+            # Task-specific metrics: prefer explicit metrics function. If none provided,
+            # perform a safe, best-effort detection for Wipe-like environments.
             if self.task_metrics_fn is not None:
                 extra_metrics = self.task_metrics_fn(self.env, info)
                 if extra_metrics:
                     info.update(extra_metrics)
+            else:
+                try:
+                    raw_env = self.env.unwrapped
+                except Exception:
+                    raw_env = getattr(self.env, 'env', self.env)
+
+                if hasattr(raw_env, 'num_markers') and hasattr(raw_env, 'wiped_markers'):
+                    total_markers = getattr(raw_env, 'num_markers', 0)
+                    wiped_markers = getattr(raw_env, 'wiped_markers', [])
+                    percent_wiped = len(wiped_markers) / total_markers if total_markers > 0 else 0.0
+                    info["physics/raw_wipe_percentage"] = percent_wiped
+
+                    raw_obs = raw_env._get_observations()
+                    contact = bool(raw_obs["robot0_contact"])
+                    self.episode_contact_steps += int(contact)
+                    info["physics/contact_step_ratio"] = self.episode_contact_steps / max(1, self.episode_steps)
+
+                    if self.is_eval and hasattr(self, 'kp_history') and len(self.kp_history) > 0:
+                        print(f"Eval | Total Markers: {total_markers} | Wiped Markers: {len(wiped_markers)} | % Wiped: {percent_wiped:.2%}")
+                        try:
+                            wandb.log({"eval/raw_wipe_percentage": percent_wiped})
+                        except Exception:
+                            pass
             
     def check_joint_violations(self):
         robot = self.env.robots[0]
