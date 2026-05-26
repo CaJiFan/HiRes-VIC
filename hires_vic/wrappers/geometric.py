@@ -23,8 +23,10 @@ class GeometricWrapper(gym.Wrapper):
         terminate_on_unsafe=False,
         use_llm_prior=False,
         llm_backend="ollama",
+        llm_model="llama3.2",
         llm_query_interval=50,
         llm_prior_weight=0.4,
+        llm_profile_path=None,
         task_type=None,
         task_metrics_fn=None,
     ):
@@ -76,12 +78,17 @@ class GeometricWrapper(gym.Wrapper):
         self.llm_planner = None
         if self.use_llm_prior:
             from hires_vic.llm.impedance_planner import LLMImpedancePlanner
-            print(f"🤖 Initializing LLM Impedance Planner with backend: {llm_backend} and model: {llm_backend}")
+            print(f"🤖 Initializing LLM Impedance Planner with backend: {llm_backend} and model: {llm_model}")
             self.llm_planner = LLMImpedancePlanner(
                 backend=llm_backend,
+                model=llm_model,
                 query_every_n_steps=llm_query_interval,
                 prior_weight=llm_prior_weight,
+                profile_path=llm_profile_path,
+                use_spd_manifold=self.use_spd_manifold
             )
+
+            self._current_llm_mode = 'align'
 
         self._last_obs_dict = {}
 

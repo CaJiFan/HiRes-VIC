@@ -101,9 +101,11 @@ def wipe_task_metrics_fn(env, info):
 def nutassembly_task_metrics_fn(env, info):
     metrics = {}
     try:
+        # Peel back the wrappers to get to the core Robosuite environment
         raw_env = getattr(env, 'unwrapped', env)
         inner = getattr(raw_env, 'unwrapped', getattr(raw_env, 'env', raw_env))
 
+        # 1. Check for standard wrapper 'success' info (Safe fallback)
         if 'success' in info:
             s = info['success']
             if hasattr(s, 'mean'):
@@ -114,28 +116,29 @@ def nutassembly_task_metrics_fn(env, info):
                 except Exception:
                     pass
 
-        if hasattr(inner, 'assembled'):
-            a = getattr(inner, 'assembled')
-            if isinstance(a, bool):
-                metrics['physics/nut_assembled'] = float(a)
-            elif hasattr(a, '__len__'):
-                metrics['physics/nut_assembled_count'] = float(len(a))
+        # 2. Extract specific NutAssembly physical metrics
+        if hasattr(inner, 'objects_on_pegs'):
+            # objects_on_pegs is an array (e.g., [1, 0] meaning one nut is on, one is not)
+            on_pegs_array = getattr(inner, 'objects_on_pegs')
+            assembled_count = float(sum(on_pegs_array))
+            
+            metrics['physics/nut_assembled_count'] = assembled_count
+            
+            # Calculate percentage based on mode
+            # single_object_mode > 0 means the task only requires 1 nut
+            required_nuts = 1.0 if getattr(inner, 'single_object_mode', 0) > 0 else float(len(on_pegs_array))
+            
+            metrics['physics/raw_assembly_percentage'] = min(1.0, assembled_count / required_nuts)
 
-        if hasattr(inner, 'nuts'):
-            nuts = getattr(inner, 'nuts')
-            total = len(nuts) if hasattr(nuts, '__len__') else None
-            assembled = 0
-            try:
-                for n in nuts:
-                    if getattr(n, 'is_inserted', False) or getattr(n, 'inserted', False):
-                        assembled += 1
-            except Exception:
-                assembled = 0
-            if total:
-                metrics['physics/raw_assembly_percentage'] = float(assembled) / total
-                metrics['physics/nut_assembled_count'] = float(assembled)
-    except Exception:
+        # 3. Overall strict success (Did the environment declare the task completely solved?)
+        if hasattr(inner, '_check_success'):
+            is_success = inner._check_success()
+            metrics['physics/env_check_success'] = 1.0 if is_success else 0.0
+
+    except Exception as e:
+        print(f"Metric extraction failed: {e}") 
         pass
+        
     return metrics
 
 def parse_args():
@@ -352,7 +355,7 @@ def setup_evaluation_callback(args, run_name):
         eval_env,
         best_model_save_path=f"./logs/best_models/{run_name}/",
         log_path=f"./logs/eval/{run_name}/",
-        eval_freq=max(160_000 // args.n_envs, 1),
+        eval_freq=max(24_000 // args.n_envs, 1),
         n_eval_episodes=10, # Run 10 deterministic episodes
         deterministic=True,
         render=False
@@ -404,7 +407,18 @@ def main():
 
     eval_callback = setup_evaluation_callback(args, run_name)
     
-    logging_callback = RobosuiteLoggingCallback()
+    modes = None
+    if args.use_llm_prior:
+        try:
+            import yaml
+            with open(args.llm_profile, 'r') as f:
+                profile = yaml.safe_load(f)
+                modes = list(profile.get("phases", {}).keys())
+                print(f"Loaded LLM impedance profile with modes: {modes}")
+        except Exception as e:
+            print(f"Failed to load LLM profile for logging callback: {e}")
+    
+    logging_callback = RobosuiteLoggingCallback(modes=modes)
 
     wandb_callback = WandbCallback(
         gradient_save_freq=0,

@@ -22,6 +22,7 @@ Examples
 """
 import math
 import time 
+import os
 import threading
 import numpy as np
 import yaml
@@ -36,24 +37,30 @@ load_dotenv()
 #   rotational:    kp     = 1 + 0.5*(a+1)*299   →  a = 2*(Kp-1)/299 - 1
 _LOG300 = math.log(300)
 
-def _kp_trans_to_norm(kp: float) -> float:
+def _kp_trans_to_norm_log(kp: float) -> float:
     """Physical translational stiffness (N/m) → [-1,1] policy action. Valid range: [1, 300]."""
     return 2.0 * math.log(max(kp, 1e-6)) / _LOG300 - 1.0
 
+def _kp_trans_to_norm_linear(kp: float) -> float:
+    """For BASELINE / LIE_GROUP (Linear space)"""
+    return 2.0 * (kp - 1.0) / (300-1) - 1.0
+
 def _kp_rot_to_norm(kp: float) -> float:
     """Physical rotational stiffness (N·m/rad) → [-1,1] policy action. Valid range: [1, 300]."""
-    return 2.0 * (kp - 1.0) / 299.0 - 1.0
+    return 2.0 * (kp - 1.0) / (300-1) - 1.0
 
-def _mode_to_action_prior(kp_trans: list, kp_rot: list) -> np.ndarray:
-    """Convert physical stiffness dicts to a 9-dim normalised action prior.
+def _mode_to_action_prior(kp_trans: list, kp_rot: list, use_log_space: bool) -> np.ndarray:   
+    """Convert physical stiffness dicts to a 9-dim normalised action 
     Layout: [m11, m22, m33, m12, m13, m23, kp_rot_x, kp_rot_y, kp_rot_z]
     Off-diagonal Mandel params set to 0 (no coupling prior).
     """
+    trans_fn = _kp_trans_to_norm_log if use_log_space else _kp_trans_to_norm_linear
+    
     return np.array([
-        _kp_trans_to_norm(kp_trans[0]),
-        _kp_trans_to_norm(kp_trans[1]),
-        _kp_trans_to_norm(kp_trans[2]),
-        0.0, 0.0, 0.0,                    # no off-diagonal coupling
+        trans_fn(kp_trans[0]),
+        trans_fn(kp_trans[1]),
+        trans_fn(kp_trans[2]),
+        0.0, 0.0, 0.0,
         _kp_rot_to_norm(kp_rot[0]),
         _kp_rot_to_norm(kp_rot[1]),
         _kp_rot_to_norm(kp_rot[2]),
@@ -61,44 +68,44 @@ def _mode_to_action_prior(kp_trans: list, kp_rot: list) -> np.ndarray:
 
 
 # ── Built-in fallback (Robosuite Wipe) ────────────────────────────────────────
-_WIPE_IMPEDANCE_MODES = {
-    "approach": {
-        "kp_trans": [33.0, 33.0, 20.0],
-        "kp_rot":   [15.0, 15.0, 15.0],
-        "description": "Pre-contact approach: uniform medium stiffness",
-    },
-    "contact_edge": {
-        "kp_trans": [90.0, 90.0, 12.0],
-        "kp_rot":   [20.0, 20.0, 10.0],
-        "description": "Initial contact: stiff lateral XY, compliant normal Z",
-    },
-    "wipe": {
-        "kp_trans": [90.0, 90.0, 12.0],
-        "kp_rot":   [20.0, 20.0, 10.0],
-        "description": "Wiping stroke: high XY stiffness, compliant normal Z",
-    },
-    "lift": {
-        "kp_trans": [20.0, 20.0, 55.0],
-        "kp_rot":   [15.0, 15.0, 15.0],
-        "description": "Lifting off: stiffen Z for clean withdrawal",
-    },
-}
+# _WIPE_IMPEDANCE_MODES = {
+#     "approach": {
+#         "kp_trans": [33.0, 33.0, 20.0],
+#         "kp_rot":   [15.0, 15.0, 15.0],
+#         "description": "Pre-contact approach: uniform medium stiffness",
+#     },
+#     "contact_edge": {
+#         "kp_trans": [90.0, 90.0, 12.0],
+#         "kp_rot":   [20.0, 20.0, 10.0],
+#         "description": "Initial contact: stiff lateral XY, compliant normal Z",
+#     },
+#     "wipe": {
+#         "kp_trans": [90.0, 90.0, 12.0],
+#         "kp_rot":   [20.0, 20.0, 10.0],
+#         "description": "Wiping stroke: high XY stiffness, compliant normal Z",
+#     },
+#     "lift": {
+#         "kp_trans": [20.0, 20.0, 55.0],
+#         "kp_rot":   [15.0, 15.0, 15.0],
+#         "description": "Lifting off: stiffen Z for clean withdrawal",
+#     },
+# }
 
-_WIPE_SYSTEM_PROMPT = """\
-You are an impedance control expert for a robot performing a wiping task on a flat surface.
-The robot uses a Variable Impedance Controller: positional stiffness is a full 3x3 SPD \
-matrix (on the Sym+(3) manifold) and orientation is controlled via SO(3) error.
+# _WIPE_SYSTEM_PROMPT = """\
+# You are an impedance control expert for a robot performing a wiping task on a flat surface.
+# The robot uses a Variable Impedance Controller: positional stiffness is a full 3x3 SPD \
+# matrix (on the Sym+(3) manifold) and orientation is controlled via SO(3) error.
 
-At each query you receive: EEF position, whether the robot is in contact, wipe completion %, \
-and distance to the wipe centroid. Select the best impedance mode for the current phase.
+# At each query you receive: EEF position, whether the robot is in contact, wipe completion %, \
+# and distance to the wipe centroid. Select the best impedance mode for the current phase.
 
-Available modes:
-  approach      – moving toward surface, not yet in contact
-  contact_edge  – just made contact or on edge of surface; establish stable contact
-  wipe          – actively wiping the surface (any direction)
-  lift          – lifting off the surface after wiping
+# Available modes:
+#   approach      – moving toward surface, not yet in contact
+#   contact_edge  – just made contact or on edge of surface; establish stable contact
+#   wipe          – actively wiping the surface (any direction)
+#   lift          – lifting off the surface after wiping
 
-Respond with ONLY the mode name, nothing else."""
+# Respond with ONLY the mode name, nothing else."""
 
 
 def _load_profile(profile_path: str) -> tuple[dict, str]:
@@ -107,7 +114,7 @@ def _load_profile(profile_path: str) -> tuple[dict, str]:
         profile = yaml.safe_load(f)
 
     phases = profile.get("phases", {})
-    system_prompt = profile.get("planner_prompt", _WIPE_SYSTEM_PROMPT)
+    system_prompt = profile.get("planner_prompt", None)
 
     modes = {}
     for name, cfg in phases.items():
@@ -120,12 +127,11 @@ def _load_profile(profile_path: str) -> tuple[dict, str]:
     return modes, system_prompt
 
 
-def _build_modes(raw_modes: dict) -> dict:
-    """Pre-compute action_prior for all modes."""
+def _build_modes(raw_modes: dict, use_log_space: bool) -> dict:
     out = {}
     for name, m in raw_modes.items():
         out[name] = dict(m)
-        out[name]["action_prior"] = _mode_to_action_prior(m["kp_trans"], m["kp_rot"])
+        out[name]["action_prior"] = _mode_to_action_prior(m["kp_trans"], m["kp_rot"], use_log_space)
     return out
 
 
@@ -158,6 +164,7 @@ class LLMImpedancePlanner:
         query_every_n_steps: int = 50,
         prior_weight: float = 0.4,
         profile_path: str | None = None,
+        use_spd_manifold: bool = True, 
     ):
         self.model = model or BACKEND_DEFAULTS[backend]
         self.query_every = query_every_n_steps
@@ -172,18 +179,27 @@ class LLMImpedancePlanner:
         if profile_path is not None:
             raw_modes, self._system_prompt = _load_profile(profile_path)
             print(f"[LLMImpedancePlanner] Loaded profile from {profile_path} "
-                  f"({len(raw_modes)} phases: {list(raw_modes.keys())})")
+                  f"({len(raw_modes)} phases: {list(raw_modes.keys())}) with spd_manifold={use_spd_manifold}.")
         else:
-            raw_modes = _WIPE_IMPEDANCE_MODES
-            self._system_prompt = _WIPE_SYSTEM_PROMPT
-            print("[LLMImpedancePlanner] Using built-in Wipe impedance modes.")
+            print('[LLMImpedancePlanner] No profile_path provided, exiting...')
+            return
+            # raw_modes = _WIPE_IMPEDANCE_MODES
+            # self._system_prompt = _WIPE_SYSTEM_PROMPT
+            # print("[LLMImpedancePlanner] Using built-in Wipe impedance modes.")
 
-        self._modes = _build_modes(raw_modes)
+        self._modes = _build_modes(raw_modes, use_spd_manifold)
         self._mode_names = list(self._modes.keys())
         self._last = self._default_suggestion()
 
         if backend == "ollama":
-            self.client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+            ollama_host = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+    
+            # Format it exactly how the OpenAI client expects
+            dynamic_base_url = f"http://{ollama_host}/v1"
+
+            print(f'Ollama hosted at {dynamic_base_url}')
+            
+            self.client = OpenAI(base_url=dynamic_base_url, api_key="ollama")
         else:
             self.client = OpenAI()
 

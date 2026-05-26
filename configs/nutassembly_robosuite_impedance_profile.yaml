@@ -1,4 +1,4 @@
-task: PegInsertionSide-v1 (Robosuite)
+task: NutAssemblySquare (Robosuite)
 robot: Panda
 description: >
   Peg-in-hole insertion adapted for Robosuite experiments. This profile assumes
@@ -46,3 +46,5 @@ planner_prompt: |
 
   You will receive: EEF pose (in robot frame), contact indicators, and any
   available insertion depth estimate. Respond with ONLY the chosen phase name.
+
+

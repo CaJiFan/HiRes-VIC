@@ -2,10 +2,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 from collections import defaultdict
 import numpy as np
 import wandb
-
-# Default mode list for the Wipe task (backwards-compatible)
-_WIPE_MODES = ["approach", "contact_edge", "wipe", "lift"]
-
+import torch
+from scipy.spatial.transform import Rotation as R
 
 class RobosuiteLoggingCallback(BaseCallback):
     """
@@ -22,12 +20,13 @@ class RobosuiteLoggingCallback(BaseCallback):
 
     def __init__(self, modes: list[str] | None = None, verbose=0):
         super().__init__(verbose)
-        self._modes = modes or _WIPE_MODES
-        self._mode_to_int = {m: i for i, m in enumerate(self._modes)}
+        self._modes = modes 
+        if modes is not None:
+            self._mode_to_int = {m: i for i, m in enumerate(self._modes)}
 
-        # Per-env episode accumulators
-        self._mode_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self._mode_force:  dict[int, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+            # Per-env episode accumulators
+            self._mode_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+            self._mode_force:  dict[int, dict[str, list]] = defaultdict(lambda: defaultdict(list))
 
     def _on_step(self) -> bool:
         dones = self.locals.get("dones")
@@ -49,35 +48,36 @@ class RobosuiteLoggingCallback(BaseCallback):
                 info = infos[idx]
 
                 # ── LLM mode distribution ────────────────────────────────────
-                counts = self._mode_counts[idx]
-                total_steps = max(sum(counts.values()), 1)
-                mode_pcts = {m: counts.get(m, 0) / total_steps for m in self._modes}
+                if self._modes is not None:
+                    counts = self._mode_counts[idx]
+                    total_steps = max(sum(counts.values()), 1)
+                    mode_pcts = {m: counts.get(m, 0) / total_steps for m in self._modes}
 
-                for m, pct in mode_pcts.items():
-                    self.logger.record(f"llm/pct_{m}", pct)
+                    for m, pct in mode_pcts.items():
+                        self.logger.record(f"llm/pct_{m}", pct)
 
-                wandb.log({
-                    "llm/episode_mode_distribution": wandb.plot.bar(
-                        wandb.Table(
-                            columns=["mode", "fraction"],
-                            data=[[m, pct] for m, pct in mode_pcts.items()]
+                    wandb.log({
+                        "llm/episode_mode_distribution": wandb.plot.bar(
+                            wandb.Table(
+                                columns=["mode", "fraction"],
+                                data=[[m, pct] for m, pct in mode_pcts.items()]
+                            ),
+                            "mode", "fraction",
+                            title="LLM Mode Distribution (this episode)"
                         ),
-                        "mode", "fraction",
-                        title="LLM Mode Distribution (this episode)"
-                    ),
-                    "llm/dominant_mode_int": self._mode_to_int.get(
-                        max(counts, key=counts.get) if counts else self._modes[0], 0
-                    ),
-                }, step=self.num_timesteps, commit=False)
+                        "llm/dominant_mode_int": self._mode_to_int.get(
+                            max(counts, key=counts.get) if counts else self._modes[0], 0
+                        ),
+                    }, step=self.num_timesteps, commit=False)
 
-                for m in self._modes:
-                    forces = self._mode_force[idx][m]
-                    if forces:
-                        self.logger.record(f"llm/avg_force_during_{m}", np.mean(forces))
+                    for m in self._modes:
+                        forces = self._mode_force[idx][m]
+                        if forces:
+                            self.logger.record(f"llm/avg_force_during_{m}", np.mean(forces))
 
-                # Reset per-episode accumulators
-                self._mode_counts[idx] = defaultdict(int)
-                self._mode_force[idx] = defaultdict(list)
+                    # Reset per-episode accumulators
+                    self._mode_counts[idx] = defaultdict(int)
+                    self._mode_force[idx] = defaultdict(list)
 
                 # ── Standard episode-end physics / smoothness metrics ────────
                 if "success" in info:
@@ -169,12 +169,13 @@ class VideoRecorderCallback(BaseCallback):
     def _record_video(self, global_step: int):
         # Single deterministic episode
         frames = []
-        self.video_env.frames.clear()
-        reset_out = self.video_env.reset()
-        obs = reset_out[0] if isinstance(reset_out, (tuple, list)) else reset_out
-        # print(len(self.video_env.frames), type(self.video_env.frames), self.video_env.frames[0].shape)
-        frames += self.video_env.frames
+        teleport_wrapper = self.video_env.env
+        teleport_wrapper.frames.clear()
 
+        reset_out = self.video_env.reset()
+        frames += teleport_wrapper.frames
+
+        obs = reset_out[0] if isinstance(reset_out, (tuple, list)) else reset_out
         def _model_obs_from_raw(raw_obs):
             # Prefer wrapper's own flattening when available
             try:
@@ -231,7 +232,7 @@ class VideoRecorderCallback(BaseCallback):
             except Exception:
                 # Best-effort fallback
                 action, _ = self.model.predict(obs, deterministic=True)
-
+            
             # Step environment
             step_out = self.video_env.step(action)
             if len(step_out) == 5:
