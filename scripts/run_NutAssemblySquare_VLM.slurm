@@ -110,7 +110,8 @@ run_train() {
         ARGS+=(--llm_query_interval 10)
         # Enable cameras explicitly
         ARGS+=(--use_cameras)
-        ARGS+=(--camera_names "wrist,frontview")
+        # For NutAssemblySquare: robot0_eye_in_hand (end-effector) + frontview (scene)
+        ARGS+=(--camera_names "robot0_eye_in_hand,frontview")
         ARGS+=(--vlm_image_size 224)
     else
         # Text-only: keep default query interval

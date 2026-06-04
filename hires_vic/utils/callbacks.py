@@ -334,36 +334,38 @@ class VideoRecorderCallback(BaseCallback):
         if not isinstance(raw_obs, dict):
             return None
 
-        # Look for wrist and frontview/agentview cameras
-        wrist_img = None
-        frontview_img = None
+        # Look for end-effector and frontview/scene cameras
+        eef_img = None
+        scene_img = None
 
         for k, v in raw_obs.items():
             k_lower = k.lower()
-            if 'wrist' in k_lower and 'image' in k_lower:
-                wrist_img = v
-            if any(x in k_lower for x in ('frontview', 'agentview')) and 'image' in k_lower:
-                frontview_img = v
+            # End-effector camera: "wrist", "eye_in_hand", "robot0_eye_in_hand", "eef"
+            if any(x in k_lower for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in k_lower:
+                eef_img = v
+            # Scene camera: "frontview", "agentview", "birdview"
+            if any(x in k_lower for x in ('frontview', 'agentview', 'birdview')) and 'image' in k_lower:
+                scene_img = v
 
         # If we have both cameras, stack them
-        if wrist_img is not None and frontview_img is not None:
+        if eef_img is not None and scene_img is not None:
             try:
-                wrist_img = self._normalize_frame(wrist_img)
-                frontview_img = self._normalize_frame(frontview_img)
+                eef_img_norm = self._normalize_frame(eef_img)
+                scene_img_norm = self._normalize_frame(scene_img)
 
-                # Ensure both frames have same height (resize wrist if needed)
-                if wrist_img.shape[0] != frontview_img.shape[0]:
-                    # Resize wrist to match frontview height
+                # Ensure both frames have same height (resize eef if needed)
+                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
+                    # Resize eef to match scene height
                     try:
                         import cv2
-                        scale = frontview_img.shape[0] / wrist_img.shape[0]
-                        new_width = int(wrist_img.shape[1] * scale)
-                        wrist_img = cv2.resize(wrist_img, (new_width, frontview_img.shape[0]))
+                        scale = scene_img_norm.shape[0] / eef_img_norm.shape[0]
+                        new_width = int(eef_img_norm.shape[1] * scale)
+                        eef_img_norm = cv2.resize(eef_img_norm, (new_width, scene_img_norm.shape[0]))
                     except Exception:
                         pass
 
-                # Stack horizontally: [wrist | frontview]
-                stacked = np.concatenate([wrist_img, frontview_img], axis=1)
+                # Stack horizontally: [eef | scene]
+                stacked = np.concatenate([eef_img_norm, scene_img_norm], axis=1)
                 return stacked
             except Exception as e:
                 print(f"Multi-camera stacking failed: {e}")
