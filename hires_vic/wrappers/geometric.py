@@ -359,17 +359,19 @@ class GeometricWrapper(gym.Wrapper):
 
         # --- EXTRACT CAMERA IMAGES FOR VLM ---
         try:
-            # Look for wrist and frontview camera images in the raw obs
+            # Look for end-effector and frontview camera images in the raw obs
             raw_env = getattr(self.env, 'unwrapped', self.env)
             if hasattr(raw_env, '_get_observations'):
                 raw_obs_full = raw_env._get_observations()
                 # Extract images by common naming patterns
                 for key in raw_obs_full.keys():
-                    if 'wrist' in key.lower() and 'image' in key.lower():
+                    # End-effector camera: "wrist", "eye_in_hand", "robot0_eye_in_hand", etc.
+                    if any(x in key.lower() for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in key.lower():
                         img = raw_obs_full[key]
                         if isinstance(img, np.ndarray):
                             self.last_wrist_image = img.copy()
-                    if 'frontview' in key.lower() and 'image' in key.lower():
+                    # Scene camera: "frontview", "agentview", "birdview", etc.
+                    if any(x in key.lower() for x in ('frontview', 'agentview', 'birdview')) and 'image' in key.lower():
                         img = raw_obs_full[key]
                         if isinstance(img, np.ndarray):
                             self.last_view_image = img.copy()
