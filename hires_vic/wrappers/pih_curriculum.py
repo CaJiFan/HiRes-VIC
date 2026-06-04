@@ -348,6 +348,17 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         return frame
 
     def reset(self, **kwargs):
+        geom_ptr = self.env
+        while hasattr(geom_ptr, 'env') and not hasattr(geom_ptr, 'llm_planner'):
+            geom_ptr = geom_ptr.env
+            
+        # Save the actual planner object and set it to None in the wrapper
+        original_planner = None
+        if hasattr(geom_ptr, 'llm_planner'):
+            print('Temporarily removing planner object in the wrapper during reset to prevent interference with scripted setup.')
+            original_planner = geom_ptr.llm_planner
+            geom_ptr.llm_planner = None
+
         print('Resetting...')
         obs = self.env.reset(**kwargs)
 
@@ -414,7 +425,7 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
 
             if dummy_t == 2:
                 try:
-                    joint_name = "SquareNut_joint0" 
+                    joint_name = "SquareNut_joint0" if 'square' in type(self.env.unwrapped).__name__.lower() else "RoundNut_joint0"
                     
                     # Find exactly where in the giant array the nut lives
                     qpos_addr = sim.model.get_joint_qpos_addr(joint_name)
@@ -438,5 +449,11 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             setattr(self.env, 'suppress_forced_gripper', False)
         except Exception:
             pass
+        
+        if hasattr(geom_ptr, 'llm_planner'):
+            print('Restoring original planner object in the wrapper after reset.')
+            geom_ptr.llm_planner = original_planner
+
+        self.unwrapped.timestep = 0
 
         return obs, info

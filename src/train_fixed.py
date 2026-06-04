@@ -101,9 +101,11 @@ def wipe_task_metrics_fn(env, info):
 def nutassembly_task_metrics_fn(env, info):
     metrics = {}
     try:
+        # Peel back the wrappers to get to the core Robosuite environment
         raw_env = getattr(env, 'unwrapped', env)
         inner = getattr(raw_env, 'unwrapped', getattr(raw_env, 'env', raw_env))
 
+        # 1. Check for standard wrapper 'success' info (Safe fallback)
         if 'success' in info:
             s = info['success']
             if hasattr(s, 'mean'):
@@ -114,28 +116,29 @@ def nutassembly_task_metrics_fn(env, info):
                 except Exception:
                     pass
 
-        if hasattr(inner, 'assembled'):
-            a = getattr(inner, 'assembled')
-            if isinstance(a, bool):
-                metrics['physics/nut_assembled'] = float(a)
-            elif hasattr(a, '__len__'):
-                metrics['physics/nut_assembled_count'] = float(len(a))
+        # 2. Extract specific NutAssembly physical metrics
+        if hasattr(inner, 'objects_on_pegs'):
+            # objects_on_pegs is an array (e.g., [1, 0] meaning one nut is on, one is not)
+            on_pegs_array = getattr(inner, 'objects_on_pegs')
+            assembled_count = float(sum(on_pegs_array))
+            
+            metrics['physics/nut_assembled_count'] = assembled_count
+            
+            # Calculate percentage based on mode
+            # single_object_mode > 0 means the task only requires 1 nut
+            required_nuts = 1.0 if getattr(inner, 'single_object_mode', 0) > 0 else float(len(on_pegs_array))
+            
+            metrics['physics/raw_assembly_percentage'] = min(1.0, assembled_count / required_nuts)
 
-        if hasattr(inner, 'nuts'):
-            nuts = getattr(inner, 'nuts')
-            total = len(nuts) if hasattr(nuts, '__len__') else None
-            assembled = 0
-            try:
-                for n in nuts:
-                    if getattr(n, 'is_inserted', False) or getattr(n, 'inserted', False):
-                        assembled += 1
-            except Exception:
-                assembled = 0
-            if total:
-                metrics['physics/raw_assembly_percentage'] = float(assembled) / total
-                metrics['physics/nut_assembled_count'] = float(assembled)
-    except Exception:
+        # 3. Overall strict success (Did the environment declare the task completely solved?)
+        if hasattr(inner, '_check_success'):
+            is_success = inner._check_success()
+            metrics['physics/env_check_success'] = 1.0 if is_success else 0.0
+
+    except Exception as e:
+        print(f"Metric extraction failed: {e}") 
         pass
+        
     return metrics
 
 def parse_args():
@@ -155,10 +158,30 @@ def parse_args():
     parser.add_argument("--fixed_kp", type=int, default=150, help="Fixed kp value")
     parser.add_argument("--gamma", type=float, default=0.99, help="gamma parameter for SAC algorithm")
     parser.add_argument("--horizon", type=int, default=150, help="Horizon parameter for SAC algorithm")
+
+
     parser.add_argument("--use_llm_prior", action="store_true")
     parser.add_argument("--llm_backend", type=str, default="ollama", choices=["openai", "ollama"])
     parser.add_argument("--llm_query_interval", type=int, default=50)
     parser.add_argument("--llm_prior_weight", type=float, default=0.4)
+    parser.add_argument("--llm_model",          default="llama3.2")
+    parser.add_argument("--llm_profile",        default="configs/nutassembly_robosuite_impedance_profile.yaml",
+                   help="Path to YAML impedance profile for this task")
+    
+    # VLM-specific arguments
+    parser.add_argument("--use_vlm", action="store_true", help="Use Vision Language Model instead of text-only LLM")
+    parser.add_argument("--vlm_model", type=str, default="llava", 
+                       choices=["llava", "llama3.2", "gpt-4o", "gpt-4o-mini"],
+                       help="VLM model to use (for use_vlm=True)")
+    parser.add_argument("--use_cameras", action="store_true", 
+                       help="Enable camera observations in the environment (required for VLM)")
+    parser.add_argument("--camera_names", type=str, default="wrist,frontview",
+                       help="Comma-separated list of camera names to use")
+    parser.add_argument("--vlm_image_size", type=int, default=224,
+                       help="Image size for VLM (resized to this dimension)")
+
+
+
     parser.add_argument("--record_video", action="store_true",
                         help="Record one eval episode as wandb video at each eval checkpoint")
     parser.add_argument("--video_fps", type=int, default=30)
@@ -211,6 +234,11 @@ def make_video_env(args):
     if task_config is not None:
         task_kwargs['task_config'] = task_config
 
+    # ✅ Parse camera names for video env
+    enable_cameras = args.use_vlm or getattr(args, 'use_cameras', False)
+    camera_names_list = args.camera_names.split(',') if isinstance(args.camera_names, str) else ['wrist', 'frontview']
+    camera_names_list = [c.strip() for c in camera_names_list]
+
     env = suite.make(
         env_name=args.env,
         robots="Panda",
@@ -219,27 +247,37 @@ def make_video_env(args):
         use_object_obs=True,
         has_offscreen_renderer=True,
         use_camera_obs=True,
-        camera_names="frontview",    # "frontview" or "agentview" are best
+        camera_names=camera_names_list,
         reward_shaping=True,
         horizon=args.horizon,
         **task_kwargs
     )
 
     env = GymWrapper(env)
+    
+    # ✅ Determine profile path: use VLM profile if use_vlm is true
+    llm_profile_path = args.llm_profile
+    if args.use_llm_prior and args.use_vlm:
+        llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
+    
     env = GeometricWrapper(
-            env=env,
-            use_spd_manifold=args.use_spd,
-            use_lie_group=args.use_lie,
-            use_diag_manifold=args.use_diag,
-            use_fixed=args.use_fixed,
-            is_eval=is_eval,
-            use_llm_prior=args.use_llm_prior,
-            llm_backend=args.llm_backend,
-            llm_query_interval=args.llm_query_interval,
-            llm_prior_weight=args.llm_prior_weight,
-            task_type=task_type,
-            task_metrics_fn=task_metrics,
-        )
+        env=env,
+        use_spd_manifold=args.use_spd,
+        use_lie_group=args.use_lie,
+        use_diag_manifold=args.use_diag,
+        use_fixed=args.use_fixed,
+        is_eval=is_eval,
+        use_llm_prior=args.use_llm_prior,
+        llm_backend=args.llm_backend,
+        llm_model=args.vlm_model if args.use_vlm else args.llm_model,
+        llm_query_interval=args.llm_query_interval,
+        llm_prior_weight=args.llm_prior_weight,
+        llm_profile_path=llm_profile_path if args.use_llm_prior else None,
+        task_type=task_type,
+        task_metrics_fn=task_metrics,
+        use_vision=args.use_vlm,  # ✅ NEW: pass vision flag
+    )
+
 
     try:
         # if getattr(args, 'primitive_init', 'none') in ('scripted', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
@@ -292,20 +330,32 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         if task_config is not None:
             task_kwargs['task_config'] = task_config
 
+        # ✅ Enable cameras if VLM is requested or explicitly enabled
+        enable_cameras = args.use_vlm or getattr(args, 'use_cameras', False)
+        camera_names_list = args.camera_names.split(',') if isinstance(args.camera_names, str) else ['wrist', 'frontview']
+        camera_names_list = [c.strip() for c in camera_names_list]
+
         env = suite.make(
             env_name=args.env,
             robots="Panda",
             controller_configs=controller_config,
             has_renderer=False,
             use_object_obs=True,
-            has_offscreen_renderer=False,
-            use_camera_obs=False,
+            has_offscreen_renderer=enable_cameras,  # Enable rendering if cameras needed
+            use_camera_obs=enable_cameras,           # Enable camera observations if requested
+            camera_names=camera_names_list if enable_cameras else None,
             reward_shaping=True,
             horizon=args.horizon,
             **task_kwargs
         )
         
         env = GymWrapper(env)
+        
+        # ✅ Determine profile path: use VLM profile if use_vlm is true
+        llm_profile_path = args.llm_profile
+        if args.use_llm_prior and args.use_vlm:
+            llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
+        
         env = GeometricWrapper(
             env=env,
             use_spd_manifold=args.use_spd,
@@ -315,10 +365,13 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             is_eval=is_eval,
             use_llm_prior=args.use_llm_prior,
             llm_backend=args.llm_backend,
+            llm_model=args.vlm_model if args.use_vlm else args.llm_model,
             llm_query_interval=args.llm_query_interval,
             llm_prior_weight=args.llm_prior_weight,
+            llm_profile_path=llm_profile_path if args.use_llm_prior else None,
             task_type=task_type,
             task_metrics_fn=task_metrics,
+            use_vision=args.use_vlm,  # ✅ NEW: pass vision flag
         )
 
         # for the NutAssembly envs 
@@ -352,7 +405,7 @@ def setup_evaluation_callback(args, run_name):
         eval_env,
         best_model_save_path=f"./logs/best_models/{run_name}/",
         log_path=f"./logs/eval/{run_name}/",
-        eval_freq=max(160_000 // args.n_envs, 1),
+        eval_freq=max(1_200_000 // args.n_envs, 1),
         n_eval_episodes=10, # Run 10 deterministic episodes
         deterministic=True,
         render=False
@@ -404,7 +457,19 @@ def main():
 
     eval_callback = setup_evaluation_callback(args, run_name)
     
-    logging_callback = RobosuiteLoggingCallback()
+    modes = None
+    if args.use_llm_prior:
+        try:
+            import yaml
+            # ✅ Use VLM profile if VLM is enabled
+            profile_to_load = "configs/nutassembly_vlm_impedance_profile.yaml" if args.use_vlm else args.llm_profile
+            with open(profile_to_load, 'r') as f:
+                profile = yaml.safe_load(f)
+                modes = list(profile.get("phases", {}).keys())
+                print(f"Loaded LLM impedance profile from {profile_to_load} with modes: {modes}")
+        except Exception as e:
+            print(f"Failed to load LLM profile for logging callback: {e}")
+    logging_callback = RobosuiteLoggingCallback(modes=modes)
 
     wandb_callback = WandbCallback(
         gradient_save_freq=0,

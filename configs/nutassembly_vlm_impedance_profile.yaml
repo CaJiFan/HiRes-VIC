@@ -1,0 +1,69 @@
+task: NutAssembly (Robosuite) — VLM Vision-based
+robot: Panda
+description: >
+  Vertical peg-in-hole (nut assembly) task with Vision Language Model guidance.
+  The VLM receives wrist + 3rd-person RGB images alongside proprioceptive state.
+  IMPORTANT: The episode starts with the robot already holding the nut and hovering 
+  directly over the peg (with +/- 2cm of XY noise). There is no approach phase.
+  The insertion axis is the robot's local +Z axis (which points straight down 
+  into the world -Z axis). 
+
+phases:
+  align:
+    # X (Left/Right) = 80.0 (Stiff for centering)
+    # Y (Forward/Backward) = 80.0 (Stiff for centering)
+    # Z (Up/Down / Insertion) = 20.0 (Compliant for soft probing)
+    kp_trans: [80.0, 80.0, 20.0]
+    kp_rot:   [30.0, 30.0, 10.0]
+    description: "Alignment: compliant along the vertical insertion axis (Z) to softly lower and feel the peg opening; stiff in X/Y to hold the center position against initial noise."
+
+  insert:
+    # X = 25.0 (Compliant lateral)
+    # Y = 25.0 (Compliant lateral)
+    # Z = 90.0 (Stiff insertion axis to push into depth)
+    kp_trans: [25.0, 25.0, 90.0]
+    kp_rot:   [15.0, 15.0, 23.0]
+    description: "Insertion: stiff along Z to make depth progress down the peg; compliant in X/Y to allow small lateral wiggles to prevent friction jamming/wedging."
+
+  seated:
+    # X/Y moderate, Z very stiff to seat fully
+    kp_trans: [50.0, 50.0, 150.0]
+    kp_rot:   [20.0, 25.0, 25.0]
+    description: "Seating: firm along Z to press fully to depth, moderate elsewhere."
+
+planner_prompt: |
+  You are an impedance control expert for a robot performing a vertical Nut Assembly 
+  (peg-in-hole) task in Robosuite. You receive:
+  1. Wrist RGB camera view (close-up of the insertion point)
+  2. Third-person RGB camera view (full task context)
+  3. Proprioceptive state (EEF position, contact flag, insertion depth)
+  
+  CRITICAL VISUAL CUES:
+  
+  **Alignment Phase** — Nut hovering over peg, first contact approaching:
+    Visual: Nut is visible in wrist cam, centered above peg. Clear gap between nut 
+            threads and peg. No deformation of nut or peg yet.
+    When:   Move to INSERT phase as soon as you see the first thread contact 
+            (slight deformation, engagement starting).
+  
+  **Insert Phase** — Nut threads engaging, pushing into peg:
+    Visual: Wrist cam shows threads progressively engaged. Some lateral compliance 
+            visible (threads flex slightly). Nut moves downward step-by-step into peg.
+    When:   Move to SEATED phase when nut is ~90% inserted (only top threads visible).
+            Watch for wedging (nut tilts or does not move down) → stay in INSERT with 
+            reduced lateral stiffness.
+  
+  **Seated Phase** — Nut fully inserted, seating to final depth:
+    Visual: Wrist cam shows nut nearly flush with peg top. Minimal vertical movement 
+            visible. Strong pushing motion to seat fully.
+    When:   End of task.
+  
+  INSERTION AXIS: Robot's LOCAL +Z (pointing downward into world -Z).
+  
+  Available impedance phases:
+    align  – Nut hovering or just touching peg. Stiff X/Y (center), compliant Z (probe).
+    insert – Nut threading onto peg. High Z stiffness (push), soft X/Y (prevent jam).
+    seated – Nut nearly fully in. Very stiff Z (seat to depth).
+  
+  Respond with ONLY the exact chosen phase name (align, insert, or seated).
+  Do NOT include punctuation, explanation, or anything else.

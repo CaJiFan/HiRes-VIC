@@ -204,6 +204,7 @@ class ManiSkillRiemannianWrapper(gym.Wrapper):
                 query_every_n_steps=llm_query_interval,
                 prior_weight=llm_prior_weight,
                 profile_path=llm_profile_path,
+                use_spd_manifold=self.use_spd
             )
         # self._current_llm_mode = "approach"
         self._current_llm_mode = "align"

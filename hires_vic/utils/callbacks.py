@@ -2,9 +2,9 @@ from stable_baselines3.common.callbacks import BaseCallback
 from collections import defaultdict
 import numpy as np
 import wandb
+import torch
+from scipy.spatial.transform import Rotation as R
 
-# Default mode list for the Wipe task (backwards-compatible)
-_WIPE_MODES = ["approach", "contact_edge", "wipe", "lift"]
 
 
 class RobosuiteLoggingCallback(BaseCallback):
@@ -22,12 +22,13 @@ class RobosuiteLoggingCallback(BaseCallback):
 
     def __init__(self, modes: list[str] | None = None, verbose=0):
         super().__init__(verbose)
-        self._modes = modes or _WIPE_MODES
-        self._mode_to_int = {m: i for i, m in enumerate(self._modes)}
+        self._modes = modes 
+        if modes is not None:
+            self._mode_to_int = {m: i for i, m in enumerate(self._modes)}
 
-        # Per-env episode accumulators
-        self._mode_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self._mode_force:  dict[int, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+            # Per-env episode accumulators
+            self._mode_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+            self._mode_force:  dict[int, dict[str, list]] = defaultdict(lambda: defaultdict(list))
 
     def _on_step(self) -> bool:
         dones = self.locals.get("dones")
@@ -49,35 +50,36 @@ class RobosuiteLoggingCallback(BaseCallback):
                 info = infos[idx]
 
                 # ── LLM mode distribution ────────────────────────────────────
-                counts = self._mode_counts[idx]
-                total_steps = max(sum(counts.values()), 1)
-                mode_pcts = {m: counts.get(m, 0) / total_steps for m in self._modes}
+                if self._modes is not None:
+                    counts = self._mode_counts[idx]
+                    total_steps = max(sum(counts.values()), 1)
+                    mode_pcts = {m: counts.get(m, 0) / total_steps for m in self._modes}
 
-                for m, pct in mode_pcts.items():
-                    self.logger.record(f"llm/pct_{m}", pct)
+                    for m, pct in mode_pcts.items():
+                        self.logger.record(f"llm/pct_{m}", pct)
 
-                wandb.log({
-                    "llm/episode_mode_distribution": wandb.plot.bar(
-                        wandb.Table(
-                            columns=["mode", "fraction"],
-                            data=[[m, pct] for m, pct in mode_pcts.items()]
+                    wandb.log({
+                        "llm/episode_mode_distribution": wandb.plot.bar(
+                            wandb.Table(
+                                columns=["mode", "fraction"],
+                                data=[[m, pct] for m, pct in mode_pcts.items()]
+                            ),
+                            "mode", "fraction",
+                            title="LLM Mode Distribution (this episode)"
                         ),
-                        "mode", "fraction",
-                        title="LLM Mode Distribution (this episode)"
-                    ),
-                    "llm/dominant_mode_int": self._mode_to_int.get(
-                        max(counts, key=counts.get) if counts else self._modes[0], 0
-                    ),
-                }, step=self.num_timesteps, commit=False)
+                        "llm/dominant_mode_int": self._mode_to_int.get(
+                            max(counts, key=counts.get) if counts else self._modes[0], 0
+                        ),
+                    }, step=self.num_timesteps, commit=False)
 
-                for m in self._modes:
-                    forces = self._mode_force[idx][m]
-                    if forces:
-                        self.logger.record(f"llm/avg_force_during_{m}", np.mean(forces))
+                    for m in self._modes:
+                        forces = self._mode_force[idx][m]
+                        if forces:
+                            self.logger.record(f"llm/avg_force_during_{m}", np.mean(forces))
 
-                # Reset per-episode accumulators
-                self._mode_counts[idx] = defaultdict(int)
-                self._mode_force[idx] = defaultdict(list)
+                    # Reset per-episode accumulators
+                    self._mode_counts[idx] = defaultdict(int)
+                    self._mode_force[idx] = defaultdict(list)
 
                 # ── Standard episode-end physics / smoothness metrics ────────
                 if "success" in info:
@@ -169,11 +171,13 @@ class VideoRecorderCallback(BaseCallback):
     def _record_video(self, global_step: int):
         # Single deterministic episode
         frames = []
-        self.video_env.frames.clear()
+        teleport_wrapper = self.video_env.env
+        teleport_wrapper.frames.clear()
+
         reset_out = self.video_env.reset()
+        frames += teleport_wrapper.frames
+
         obs = reset_out[0] if isinstance(reset_out, (tuple, list)) else reset_out
-        # print(len(self.video_env.frames), type(self.video_env.frames), self.video_env.frames[0].shape)
-        frames += self.video_env.frames
 
         def _model_obs_from_raw(raw_obs):
             # Prefer wrapper's own flattening when available
@@ -228,7 +232,7 @@ class VideoRecorderCallback(BaseCallback):
             model_obs = _model_obs_from_raw(obs)
             try:
                 action, _ = self.model.predict(model_obs, deterministic=True)
-            except Exception:
+            except Exception as e:
                 # Best-effort fallback
                 action, _ = self.model.predict(obs, deterministic=True)
 
@@ -257,7 +261,13 @@ class VideoRecorderCallback(BaseCallback):
                 print(f"WandB video upload failed: {e}")
 
     def _capture_frame(self):
-        """Capture a single RGB frame from the video env (render or raw obs fallback)."""
+        """Capture a single RGB frame with both wrist and frontview cameras side-by-side."""
+        # Try to get multi-camera view (wrist + frontview)
+        multi_frame = self._capture_multi_camera_frame()
+        if multi_frame is not None:
+            return multi_frame
+        
+        # Fallback: single frontview/agentview camera
         frame = None
         try:
             frame = self.video_env.render()
@@ -301,6 +311,90 @@ class VideoRecorderCallback(BaseCallback):
                 frame = np.flipud(frame)
             except Exception:
                 pass
+        return frame
+
+    def _capture_multi_camera_frame(self):
+        """
+        Capture wrist + frontview cameras and compose them side-by-side.
+        Returns a stacked RGB frame (height, width*2, 3) or None if cameras unavailable.
+        """
+        raw_obs = None
+        try:
+            raw_obs = self.video_env.env.unwrapped._get_observations()
+        except Exception:
+            try:
+                raw_obs = self.video_env.unwrapped._get_observations()
+            except Exception:
+                raw_obs = None
+
+        if not isinstance(raw_obs, dict):
+            return None
+
+        # Look for wrist and frontview/agentview cameras
+        wrist_img = None
+        frontview_img = None
+
+        for k, v in raw_obs.items():
+            k_lower = k.lower()
+            if 'wrist' in k_lower and 'image' in k_lower:
+                wrist_img = v
+            if any(x in k_lower for x in ('frontview', 'agentview')) and 'image' in k_lower:
+                frontview_img = v
+
+        # If we have both cameras, stack them
+        if wrist_img is not None and frontview_img is not None:
+            try:
+                wrist_img = self._normalize_frame(wrist_img)
+                frontview_img = self._normalize_frame(frontview_img)
+
+                # Ensure both frames have same height (resize wrist if needed)
+                if wrist_img.shape[0] != frontview_img.shape[0]:
+                    # Resize wrist to match frontview height
+                    try:
+                        import cv2
+                        scale = frontview_img.shape[0] / wrist_img.shape[0]
+                        new_width = int(wrist_img.shape[1] * scale)
+                        wrist_img = cv2.resize(wrist_img, (new_width, frontview_img.shape[0]))
+                    except Exception:
+                        pass
+
+                # Stack horizontally: [wrist | frontview]
+                stacked = np.concatenate([wrist_img, frontview_img], axis=1)
+                return stacked
+            except Exception as e:
+                print(f"Multi-camera stacking failed: {e}")
+                return None
+
+        return None
+
+    def _normalize_frame(self, frame):
+        """Convert frame to normalized uint8 RGB (H, W, 3)."""
+        if isinstance(frame, torch.Tensor):
+            frame = frame.cpu().numpy()
+        frame = np.asarray(frame, dtype=np.uint8)
+        
+        # Handle batch dimension if present
+        if frame.ndim == 4:
+            frame = frame[0]
+        
+        # Handle different channel orderings
+        if frame.ndim == 3:
+            if frame.shape[2] == 4:
+                # RGBA -> RGB
+                frame = frame[..., :3]
+            elif frame.shape[0] == 3:
+                # (3, H, W) -> (H, W, 3)
+                frame = np.transpose(frame, (1, 2, 0))
+            elif frame.shape[0] == 4:
+                # (4, H, W) RGBA -> (H, W, 3) RGB
+                frame = np.transpose(frame, (1, 2, 0))[..., :3]
+        
+        # Flip vertically (standard Robosuite convention)
+        try:
+            frame = np.flipud(frame)
+        except Exception:
+            pass
+
         return frame
 
     def _determine_action_indices(self):

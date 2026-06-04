@@ -1,10 +1,11 @@
-task: PegInsertionSide-v1 (Robosuite)
+task: NutAssembly (Robosuite)
 robot: Panda
 description: >
-  Peg-in-hole insertion adapted for Robosuite experiments. This profile assumes
-  the insertion axis is vertical (robot local +Z). Values are tuned to make
-  the insertion axis compliant during alignment and stiff during insertion,
-  with lateral axes remaining more compliant to avoid jamming.
+  Vertical peg-in-hole (nut assembly) task. IMPORTANT ARCHITECTURE NOTE: 
+  The episode starts with the robot already holding the nut and hovering 
+  directly over the peg (with +/- 2cm of XY noise). There is no approach phase.
+  The insertion axis is the robot's local +Z axis (which points straight down 
+  into the world -Z axis). 
 
 phases:
   align:
@@ -13,7 +14,7 @@ phases:
     # Z (Up/Down / Insertion) = 20.0 (Compliant)
     kp_trans: [80.0, 80.0, 20.0]
     kp_rot:   [30.0, 30.0, 10.0]
-    description: "Alignment: compliant along the vertical insertion axis (Z) to softly find the opening; stiff in X/Y for centering"
+    description: "Alignment: compliant along the vertical insertion axis (Z) to softly lower and feel the peg opening; stiff in X/Y to hold the center position against initial noise."
 
   insert:
     # X = 25.0 (Compliant lateral)
@@ -21,28 +22,30 @@ phases:
     # Z = 90.0 (Stiff insertion axis)
     kp_trans: [25.0, 25.0, 90.0]
     kp_rot:   [15.0, 15.0, 23.0]
-    description: "Insertion: stiff along Z to make depth progress; compliant in X/Y to allow small lateral motions to avoid jamming"
+    description: "Insertion: stiff along Z to make depth progress down the peg; compliant in X/Y to allow small lateral wiggles to prevent friction jamming/wedging."
 
   seated:
     # X/Y moderate, Z very stiff to seat fully
     kp_trans: [50.0, 50.0, 150.0]
     kp_rot:   [20.0, 25.0, 25.0]
-    description: "Seating: firm along Z to press fully to depth, moderate elsewhere"
+    description: "Seating: firm along Z to press fully to depth, moderate elsewhere."
 
 planner_prompt: |
-  You are an impedance control expert for a robot performing a peg-in-hole insertion
-  in Robosuite. IMPORTANT: Robosuite returns poses in the robot/base/world frame by
-  default; interpret EEF and object poses accordingly.
-
-  CRITICAL CONTEXT: The insertion axis for the task is the robot's LOCAL +Z axis
-  (vertical). Use the following impedance phases:
-
-    align  – peg tip near the hole opening. Use low stiffness along Z to softly
-             probe the opening while holding X/Y to center.
-    insert – peg partially inserted. Use high stiffness along Z to push into depth
-             while allowing compliance in X/Y to prevent jamming.
-    seated – peg nearly fully inserted. Use high stiffness along Z to seat to full
-             depth and moderate stiffness elsewhere.
+  You are an impedance control expert for a robot performing a vertical Nut Assembly 
+  (peg-in-hole) task in Robosuite. 
+  
+  CRITICAL CONTEXT: 
+  1. The episode begins with the robot already hovering directly over the peg.
+  2. The insertion axis is the robot's LOCAL +Z axis (pointing straight down).
+  
+  Use the following impedance phases:
+    align  – nut is hovering over the peg or just touching the tip. Use low stiffness 
+             along Z to softly probe downward while holding X/Y stiff to center.
+    insert – nut is partially on the peg. Use high stiffness along Z to push into depth 
+             while allowing high compliance (softness) in X/Y to prevent jamming.
+    seated – nut is nearly fully inserted. Use high stiffness along Z to seat to full 
+             depth.
 
   You will receive: EEF pose (in robot frame), contact indicators, and any
-  available insertion depth estimate. Respond with ONLY the chosen phase name.
+  available insertion depth estimate. Respond with ONLY the exact chosen phase name 
+  (align, insert, or seated).

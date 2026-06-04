@@ -22,12 +22,22 @@ Examples
 """
 import math
 import time 
+import os
 import threading
 import numpy as np
 import yaml
+import re
+import base64
+import io
 from dataclasses import dataclass
 from openai import OpenAI
 from dotenv import load_dotenv
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
 load_dotenv()
 
 # Conversion helpers: physical stiffness values → normalised [-1,1] policy action space
@@ -36,24 +46,30 @@ load_dotenv()
 #   rotational:    kp     = 1 + 0.5*(a+1)*299   →  a = 2*(Kp-1)/299 - 1
 _LOG300 = math.log(300)
 
-def _kp_trans_to_norm(kp: float) -> float:
+def _kp_trans_to_norm_log(kp: float) -> float:
     """Physical translational stiffness (N/m) → [-1,1] policy action. Valid range: [1, 300]."""
     return 2.0 * math.log(max(kp, 1e-6)) / _LOG300 - 1.0
 
+def _kp_trans_to_norm_linear(kp: float) -> float:
+    """For BASELINE / LIE_GROUP (Linear space)"""
+    return 2.0 * (kp - 1.0) / (300-1) - 1.0
+
 def _kp_rot_to_norm(kp: float) -> float:
     """Physical rotational stiffness (N·m/rad) → [-1,1] policy action. Valid range: [1, 300]."""
-    return 2.0 * (kp - 1.0) / 299.0 - 1.0
+    return 2.0 * (kp - 1.0) / (300-1) - 1.0
 
-def _mode_to_action_prior(kp_trans: list, kp_rot: list) -> np.ndarray:
-    """Convert physical stiffness dicts to a 9-dim normalised action prior.
+def _mode_to_action_prior(kp_trans: list, kp_rot: list, use_log_space: bool) -> np.ndarray:   
+    """Convert physical stiffness dicts to a 9-dim normalised action 
     Layout: [m11, m22, m33, m12, m13, m23, kp_rot_x, kp_rot_y, kp_rot_z]
     Off-diagonal Mandel params set to 0 (no coupling prior).
     """
+    trans_fn = _kp_trans_to_norm_log if use_log_space else _kp_trans_to_norm_linear
+    
     return np.array([
-        _kp_trans_to_norm(kp_trans[0]),
-        _kp_trans_to_norm(kp_trans[1]),
-        _kp_trans_to_norm(kp_trans[2]),
-        0.0, 0.0, 0.0,                    # no off-diagonal coupling
+        trans_fn(kp_trans[0]),
+        trans_fn(kp_trans[1]),
+        trans_fn(kp_trans[2]),
+        0.0, 0.0, 0.0,
         _kp_rot_to_norm(kp_rot[0]),
         _kp_rot_to_norm(kp_rot[1]),
         _kp_rot_to_norm(kp_rot[2]),
@@ -61,44 +77,44 @@ def _mode_to_action_prior(kp_trans: list, kp_rot: list) -> np.ndarray:
 
 
 # ── Built-in fallback (Robosuite Wipe) ────────────────────────────────────────
-_WIPE_IMPEDANCE_MODES = {
-    "approach": {
-        "kp_trans": [33.0, 33.0, 20.0],
-        "kp_rot":   [15.0, 15.0, 15.0],
-        "description": "Pre-contact approach: uniform medium stiffness",
-    },
-    "contact_edge": {
-        "kp_trans": [90.0, 90.0, 12.0],
-        "kp_rot":   [20.0, 20.0, 10.0],
-        "description": "Initial contact: stiff lateral XY, compliant normal Z",
-    },
-    "wipe": {
-        "kp_trans": [90.0, 90.0, 12.0],
-        "kp_rot":   [20.0, 20.0, 10.0],
-        "description": "Wiping stroke: high XY stiffness, compliant normal Z",
-    },
-    "lift": {
-        "kp_trans": [20.0, 20.0, 55.0],
-        "kp_rot":   [15.0, 15.0, 15.0],
-        "description": "Lifting off: stiffen Z for clean withdrawal",
-    },
-}
+# _WIPE_IMPEDANCE_MODES = {
+#     "approach": {
+#         "kp_trans": [33.0, 33.0, 20.0],
+#         "kp_rot":   [15.0, 15.0, 15.0],
+#         "description": "Pre-contact approach: uniform medium stiffness",
+#     },
+#     "contact_edge": {
+#         "kp_trans": [90.0, 90.0, 12.0],
+#         "kp_rot":   [20.0, 20.0, 10.0],
+#         "description": "Initial contact: stiff lateral XY, compliant normal Z",
+#     },
+#     "wipe": {
+#         "kp_trans": [90.0, 90.0, 12.0],
+#         "kp_rot":   [20.0, 20.0, 10.0],
+#         "description": "Wiping stroke: high XY stiffness, compliant normal Z",
+#     },
+#     "lift": {
+#         "kp_trans": [20.0, 20.0, 55.0],
+#         "kp_rot":   [15.0, 15.0, 15.0],
+#         "description": "Lifting off: stiffen Z for clean withdrawal",
+#     },
+# }
 
-_WIPE_SYSTEM_PROMPT = """\
-You are an impedance control expert for a robot performing a wiping task on a flat surface.
-The robot uses a Variable Impedance Controller: positional stiffness is a full 3x3 SPD \
-matrix (on the Sym+(3) manifold) and orientation is controlled via SO(3) error.
+# _WIPE_SYSTEM_PROMPT = """\
+# You are an impedance control expert for a robot performing a wiping task on a flat surface.
+# The robot uses a Variable Impedance Controller: positional stiffness is a full 3x3 SPD \
+# matrix (on the Sym+(3) manifold) and orientation is controlled via SO(3) error.
 
-At each query you receive: EEF position, whether the robot is in contact, wipe completion %, \
-and distance to the wipe centroid. Select the best impedance mode for the current phase.
+# At each query you receive: EEF position, whether the robot is in contact, wipe completion %, \
+# and distance to the wipe centroid. Select the best impedance mode for the current phase.
 
-Available modes:
-  approach      – moving toward surface, not yet in contact
-  contact_edge  – just made contact or on edge of surface; establish stable contact
-  wipe          – actively wiping the surface (any direction)
-  lift          – lifting off the surface after wiping
+# Available modes:
+#   approach      – moving toward surface, not yet in contact
+#   contact_edge  – just made contact or on edge of surface; establish stable contact
+#   wipe          – actively wiping the surface (any direction)
+#   lift          – lifting off the surface after wiping
 
-Respond with ONLY the mode name, nothing else."""
+# Respond with ONLY the mode name, nothing else."""
 
 
 def _load_profile(profile_path: str) -> tuple[dict, str]:
@@ -107,7 +123,7 @@ def _load_profile(profile_path: str) -> tuple[dict, str]:
         profile = yaml.safe_load(f)
 
     phases = profile.get("phases", {})
-    system_prompt = profile.get("planner_prompt", _WIPE_SYSTEM_PROMPT)
+    system_prompt = profile.get("planner_prompt", None)
 
     modes = {}
     for name, cfg in phases.items():
@@ -120,12 +136,11 @@ def _load_profile(profile_path: str) -> tuple[dict, str]:
     return modes, system_prompt
 
 
-def _build_modes(raw_modes: dict) -> dict:
-    """Pre-compute action_prior for all modes."""
+def _build_modes(raw_modes: dict, use_log_space: bool) -> dict:
     out = {}
     for name, m in raw_modes.items():
         out[name] = dict(m)
-        out[name]["action_prior"] = _mode_to_action_prior(m["kp_trans"], m["kp_rot"])
+        out[name]["action_prior"] = _mode_to_action_prior(m["kp_trans"], m["kp_rot"], use_log_space)
     return out
 
 
@@ -158,10 +173,15 @@ class LLMImpedancePlanner:
         query_every_n_steps: int = 50,
         prior_weight: float = 0.4,
         profile_path: str | None = None,
+        use_spd_manifold: bool = True,
+        use_vision: bool = False,
+        image_size: tuple = (224, 224),
     ):
         self.model = model or BACKEND_DEFAULTS[backend]
         self.query_every = query_every_n_steps
         self.prior_weight = prior_weight
+        self.use_vision = use_vision
+        self.image_size = image_size
         self._step = 0
         self._history: list[dict] = []
         self._query_in_flight = False
@@ -172,20 +192,80 @@ class LLMImpedancePlanner:
         if profile_path is not None:
             raw_modes, self._system_prompt = _load_profile(profile_path)
             print(f"[LLMImpedancePlanner] Loaded profile from {profile_path} "
-                  f"({len(raw_modes)} phases: {list(raw_modes.keys())})")
+                  f"({len(raw_modes)} phases: {list(raw_modes.keys())}) with spd_manifold={use_spd_manifold} vision={use_vision}.")
         else:
-            raw_modes = _WIPE_IMPEDANCE_MODES
-            self._system_prompt = _WIPE_SYSTEM_PROMPT
-            print("[LLMImpedancePlanner] Using built-in Wipe impedance modes.")
+            print('[LLMImpedancePlanner] No profile_path provided, exiting...')
+            return
+            # raw_modes = _WIPE_IMPEDANCE_MODES
+            # self._system_prompt = _WIPE_SYSTEM_PROMPT
+            # print("[LLMImpedancePlanner] Using built-in Wipe impedance modes.")
 
-        self._modes = _build_modes(raw_modes)
+        self._modes = _build_modes(raw_modes, use_spd_manifold)
         self._mode_names = list(self._modes.keys())
         self._last = self._default_suggestion()
 
         if backend == "ollama":
-            self.client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+            ollama_host = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+    
+            # Format it exactly how the OpenAI client expects
+            dynamic_base_url = f"http://{ollama_host}/v1"
+
+            print(f'Ollama hosted at {dynamic_base_url}')
+            
+            self.client = OpenAI(base_url=dynamic_base_url, api_key="ollama")
         else:
             self.client = OpenAI()
+
+    def _parse_mode_string(self, mode_str: str) -> str:
+        """Robustly extract mode name from potentially messy LLM output."""
+        # Strip punctuation and extra whitespace
+        mode_str = re.sub(r'[^\w\s]', '', mode_str).strip().lower()
+        
+        # Try exact match first
+        if mode_str in self._modes:
+            return mode_str
+        
+        # Try substring matching for known phases
+        for known_mode in self._mode_names:
+            if known_mode in mode_str:
+                return known_mode
+        
+        # If first word is a known mode
+        first_word = mode_str.split()[0] if mode_str else ""
+        if first_word in self._modes:
+            return first_word
+        
+        # Default to first mode
+        return self._mode_names[0]
+
+    def _encode_image_to_base64(self, image_array: np.ndarray) -> str:
+        """Convert numpy image array to base64 JPEG for API submission."""
+        if Image is None:
+            print("[LLMImpedancePlanner] PIL not installed, skipping image encoding")
+            return ""
+        
+        try:
+            # Ensure image is in uint8 format
+            if image_array.dtype == np.float32 or image_array.dtype == np.float64:
+                image_array = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
+            else:
+                image_array = np.clip(image_array, 0, 255).astype(np.uint8)
+            
+            # Resize if needed
+            if image_array.shape[:2] != self.image_size:
+                image_pil = Image.fromarray(image_array)
+                image_pil = image_pil.resize(self.image_size, Image.Resampling.LANCZOS)
+            else:
+                image_pil = Image.fromarray(image_array)
+            
+            # Convert to JPEG bytes
+            buffered = io.BytesIO()
+            image_pil.save(buffered, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            return img_str
+        except Exception as e:
+            print(f"[LLMImpedancePlanner] Image encoding failed: {e}")
+            return ""
 
     def _fetch_async(self, state_desc: str):
         """Runs in a background thread. Updates self._last when done."""
@@ -200,6 +280,8 @@ class LLMImpedancePlanner:
                 messages=[{"role": "system", "content": self._system_prompt}] + history_snapshot,
             )
             mode_str = response.choices[0].message.content.strip().lower()
+            mode_str = self._parse_mode_string(mode_str)
+            print(f"[LLMImpedancePlanner] LLM response: '{mode_str}' in {time.time() - start_time:.2f}s")
             if mode_str not in self._modes:
                 mode_str = self._mode_names[0]
         except Exception as e:
@@ -213,6 +295,89 @@ class LLMImpedancePlanner:
         self._ep_query_count += 1
 
         self._history = history_snapshot + [{"role": "assistant", "content": mode_str}]
+        if len(self._history) > 20:
+            self._history = self._history[-20:]
+
+        m = self._modes[mode_str]
+        self._last = ImpedanceSuggestion(
+            mode=mode_str,
+            action_prior=m["action_prior"].copy(),
+            confidence=self.prior_weight,
+        )
+        self._query_in_flight = False
+
+    def _fetch_async_vision(self, state_desc: str, wrist_image: np.ndarray | None = None, view_image: np.ndarray | None = None):
+        """Runs in a background thread with vision. Updates self._last when done."""
+        start_time = time.time()
+        
+        try:
+            if wrist_image is not None or view_image is not None:
+                # Build multimodal message
+                user_content = []
+                
+                # Add text
+                user_content.append({
+                    "type": "text",
+                    "text": f"Current robot state:\n{state_desc}\n\nAnalyze the images and select the best impedance mode."
+                })
+                
+                # Add wrist image
+                if wrist_image is not None:
+                    img_b64 = self._encode_image_to_base64(wrist_image)
+                    if img_b64:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_b64}",
+                                "detail": "low"
+                            }
+                        })
+                
+                # Add 3rd person image
+                if view_image is not None:
+                    img_b64 = self._encode_image_to_base64(view_image)
+                    if img_b64:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_b64}",
+                                "detail": "low"
+                            }
+                        })
+                
+                messages = [{"role": "system", "content": self._system_prompt}]
+                messages += self._history
+                messages.append({"role": "user", "content": user_content})
+            else:
+                # Fallback to text-only
+                user_msg = f"Current robot state:\n{state_desc}\n\nWhich impedance mode?"
+                messages = [{"role": "system", "content": self._system_prompt}]
+                messages += self._history
+                messages.append({"role": "user", "content": user_msg})
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=20,
+                temperature=0,
+                messages=messages,
+            )
+            mode_str = response.choices[0].message.content.strip().lower()
+            mode_str = self._parse_mode_string(mode_str)
+            print(f"[LLMImpedancePlanner] VLM response: '{mode_str}' in {time.time() - start_time:.2f}s")
+            if mode_str not in self._modes:
+                mode_str = self._mode_names[0]
+        except Exception as e:
+            print(f"[LLMImpedancePlanner] VLM query failed: {e}")
+            mode_str = self._last.mode
+        
+        end_time = time.time()
+        latency = end_time - start_time
+        self._last_latency = latency
+        self._ep_total_llm_time += latency
+        self._ep_query_count += 1
+
+        self._history.append({"role": "user", "content": "images received"})
+        self._history.append({"role": "assistant", "content": mode_str})
         if len(self._history) > 20:
             self._history = self._history[-20:]
 
@@ -253,13 +418,27 @@ class LLMImpedancePlanner:
 
         return "\n".join(lines)
 
-    def query(self, obs_dict: dict) -> ImpedanceSuggestion:
-        """Non-blocking query. Returns last suggestion immediately."""
+    def query(self, obs_dict: dict, wrist_image: np.ndarray | None = None, view_image: np.ndarray | None = None) -> ImpedanceSuggestion:
+        """Non-blocking query. Returns last suggestion immediately.
+        
+        Args:
+            obs_dict: Dictionary of observations
+            wrist_image: Optional wrist camera RGB image (numpy array)
+            view_image: Optional 3rd-person camera RGB image (numpy array)
+        """
         self._step += 1
         if self._step % self.query_every == 0 and not self._query_in_flight:
             self._query_in_flight = True
             state_desc = self._build_state_description(obs_dict)
-            t = threading.Thread(target=self._fetch_async, args=(state_desc,), daemon=True)
+            
+            if self.use_vision and (wrist_image is not None or view_image is not None):
+                t = threading.Thread(
+                    target=self._fetch_async_vision,
+                    args=(state_desc, wrist_image, view_image),
+                    daemon=True
+                )
+            else:
+                t = threading.Thread(target=self._fetch_async, args=(state_desc,), daemon=True)
             t.start()
         return self._last
 

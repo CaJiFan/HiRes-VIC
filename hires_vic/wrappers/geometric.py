@@ -23,10 +23,13 @@ class GeometricWrapper(gym.Wrapper):
         terminate_on_unsafe=False,
         use_llm_prior=False,
         llm_backend="ollama",
+        llm_model="llama3.2",
         llm_query_interval=50,
         llm_prior_weight=0.4,
+        llm_profile_path=None,
         task_type=None,
         task_metrics_fn=None,
+        use_vision=False,
     ):
         super().__init__(env)
 
@@ -76,12 +79,24 @@ class GeometricWrapper(gym.Wrapper):
         self.llm_planner = None
         if self.use_llm_prior:
             from hires_vic.llm.impedance_planner import LLMImpedancePlanner
-            print(f"🤖 Initializing LLM Impedance Planner with backend: {llm_backend} and model: {llm_backend}")
+            print(f"🤖 Initializing LLM Impedance Planner with backend: {llm_backend} and model: {llm_model}")
+            print(f"   Vision enabled: {use_vision}")
             self.llm_planner = LLMImpedancePlanner(
                 backend=llm_backend,
+                model=llm_model,
                 query_every_n_steps=llm_query_interval,
                 prior_weight=llm_prior_weight,
+                profile_path=llm_profile_path,
+                use_spd_manifold=self.use_spd_manifold,
+                use_vision=use_vision,
+                image_size=(224, 224)
             )
+
+            self._current_llm_mode = 'align'
+        
+        # Camera buffers for VLM
+        self.last_wrist_image = None
+        self.last_view_image = None
 
         self._last_obs_dict = {}
 
@@ -105,14 +120,24 @@ class GeometricWrapper(gym.Wrapper):
         )
         print(f"▶️ Action space strictly set to [-1, 1] with shape: {self.action_space.shape}")
 
-        # Observation space 
+        # --- TRUE RESIDUAL RL: STATE TRACKERS ---
+        self.prior_dim = 9 if self.use_spd_manifold else 6
+        self.extra_obs_dim = self.prior_dim + 1 # +1 for the confidence weight 'w'
+        
+        self.current_prior = np.zeros(self.prior_dim, dtype=np.float32)
+        self.current_w = 0.0
+
+        # Observation space expansion
         obs = self.env.reset()
         flat_obs = self._flatten_obs(obs)
+        
+        expanded_obs_shape = (flat_obs.shape[0] + self.extra_obs_dim,)
 
-        print('▶️ Observation space shape after flattening: ', flat_obs.shape)
+        print('▶️ Base Observation space shape: ', flat_obs.shape)
+        print('▶️ Expanded Residual Observation space shape: ', expanded_obs_shape)
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=flat_obs.shape, dtype=np.float32
+            low=-np.inf, high=np.inf, shape=expanded_obs_shape, dtype=np.float32
         )
 
     def _flatten_obs(self, obs):
@@ -205,6 +230,15 @@ class GeometricWrapper(gym.Wrapper):
 
         if self.llm_planner is not None:
             self.llm_planner.reset()
+            # ✅ FIX: Initialize prior from planner's default suggestion
+            self.current_prior = self.llm_planner._last.action_prior.copy()
+            self.current_w = self.llm_planner._last.confidence
+        else:
+            self.current_prior = np.zeros(self.prior_dim, dtype=np.float32)
+            self.current_w = 0.0
+        
+        extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
+        flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
 
         self.prev_Kp = np.eye(3) # Default starting stiffness
         self.prev_ang_vel = np.zeros(3)
@@ -230,18 +264,30 @@ class GeometricWrapper(gym.Wrapper):
 
         if self.is_eval:
             self.kp_history.clear()
+        
+        # Clear image buffers
+        self.last_wrist_image = None
+        self.last_view_image = None
+        
         return flat_obs, {}
 
-    def step(self, action):
+    def step(self, rl_action):
+        # if self.llm_planner is not None:
+        #     suggestion = self.llm_planner.query(self._last_obs_dict)
+        #     # Blend RL action with LLM prior entirely in normalized [-1,1] space.
+        #     # action_prior covers the first 9 dims: [6 Mandel params, 3 kp_rot].
+        #     w = suggestion.confidence
+        #     action = action.copy()
+        #     n = len(suggestion.action_prior)  # 9 for use_spd_manifold
+        #     action[:n] = (1 - w) * action[:n] + w * suggestion.action_prior
+        #     self._current_llm_mode = suggestion.mode
+
+        # --- TRUE RESIDUAL RL: BLEND USING VISIBLE STATE ---
+        # The agent outputted `rl_action` based on seeing `self.current_prior`.
+        # We blend them here BEFORE calculating the Riemannian math.
+        action = rl_action.copy()
         if self.llm_planner is not None:
-            suggestion = self.llm_planner.query(self._last_obs_dict)
-            # Blend RL action with LLM prior entirely in normalized [-1,1] space.
-            # action_prior covers the first 9 dims: [6 Mandel params, 3 kp_rot].
-            w = suggestion.confidence
-            action = action.copy()
-            n = len(suggestion.action_prior)  # 9 for use_spd_manifold
-            action[:n] = (1 - w) * action[:n] + w * suggestion.action_prior
-            self._current_llm_mode = suggestion.mode
+            action[:self.prior_dim] = (1.0 - self.current_w) * action[:self.prior_dim] + (self.current_w * self.current_prior)
 
         if self.use_spd_manifold:
             mandel_params = action[:6].copy()
@@ -309,6 +355,40 @@ class GeometricWrapper(gym.Wrapper):
         self.episode_steps += 1
        
         obs, reward, terminated, truncated, info = step_return
+        flat_obs = self._flatten_obs(obs)
+
+        # --- EXTRACT CAMERA IMAGES FOR VLM ---
+        try:
+            # Look for wrist and frontview camera images in the raw obs
+            raw_env = getattr(self.env, 'unwrapped', self.env)
+            if hasattr(raw_env, '_get_observations'):
+                raw_obs_full = raw_env._get_observations()
+                # Extract images by common naming patterns
+                for key in raw_obs_full.keys():
+                    if 'wrist' in key.lower() and 'image' in key.lower():
+                        img = raw_obs_full[key]
+                        if isinstance(img, np.ndarray):
+                            self.last_wrist_image = img.copy()
+                    if 'frontview' in key.lower() and 'image' in key.lower():
+                        img = raw_obs_full[key]
+                        if isinstance(img, np.ndarray):
+                            self.last_view_image = img.copy()
+        except Exception as e:
+            pass  # Silently fail if images not available
+
+        # --- TRUE RESIDUAL RL: UPDATE LLM & APPEND STATE ---
+        if self.llm_planner is not None:
+            suggestion = self.llm_planner.query(
+                self._last_obs_dict,
+                wrist_image=self.last_wrist_image,
+                view_image=self.last_view_image
+            )
+            self.current_prior = suggestion.action_prior[:self.prior_dim]
+            self.current_w = suggestion.confidence
+            self._current_llm_mode = suggestion.mode
+
+        extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
+        flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
 
         epsilon = 1e-6
         safe_kp = kp_matrix_3x3 + np.eye(3) * epsilon
@@ -355,7 +435,7 @@ class GeometricWrapper(gym.Wrapper):
 
         self.log_info(physical_kp_vals, step_return)
 
-        return self._flatten_obs(obs), reward, terminated, truncated, info
+        return flat_obs, reward, terminated, truncated, info
     
     def log_info(self, physical_kp_vals, step_return):
         obs, reward, terminated, truncated, info = step_return
