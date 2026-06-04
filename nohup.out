@@ -873,3 +873,143 @@ Launched: NutAssemblySquare | NUT_SQ_LIE_ONLY_KP1_300_GAMMA0.99 | SEED=3
 Starting SAC on NutAssemblySquare for 3_000_000 steps...
 Date: mié 27 may 2026 18:04:31 CEST
 ==================================================
+Starting Ollama server on port 11000...
+scripts/run_NutAssemblySquare_VLM.sh: line 17: /home/cjimenez/.local/bin/ollama: No such file or directory
+==================================================
+SMOKE TEST: Verifying Ollama is responding...
+==================================================
+❌ LLM Smoke Test FAILED! Ollama is not responding correctly.
+Raw Output: 
+Aborting job to save compute hours.
+Starting Ollama server on port 11434...
+==================================================
+SMOKE TEST: Verifying Ollama is responding...
+==================================================
+✅ LLM Smoke Test PASSED! The model is loaded and generating text.
+Model Output:
+"response":"Hello! It's nice to meet you. Is there something I can help you with, or would you like to chat?"
+==================================================
+Starting VLM-guided residual RL experiments...
+Testing: llama3.2 (text+multimodal), llava (vision specialist)
+
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:31:33 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.25_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:31:33 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.25_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:31:43 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.50_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:31:43 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.50_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:31:53 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.75_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:31:53 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.75_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+Starting Ollama server on port 11434...
+==================================================
+SMOKE TEST: Verifying Ollama is responding...
+==================================================
+✅ LLM Smoke Test PASSED! The model is loaded and generating text.
+Model Output:
+"response":"Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?"
+==================================================
+Starting VLM-guided residual RL experiments...
+Testing: llama3.2 (text+multimodal), llava (vision specialist)
+
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:32:27 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.25_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:32:27 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.25_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:32:47 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.50_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:32:47 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.50_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:33:07 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.75_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:33:07 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.75_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:33:28 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.25_G0.90 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:33:28 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.25_G0.90 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:33:48 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.50_G0.90 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:33:48 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.50_G0.90 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:34:08 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.75_G0.90 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:34:08 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.75_G0.90 | VLM=TRUE | Model=llama3.2 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:34:28 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.25_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:34:28 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.25_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:34:48 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_10M_VLM_LLAMA32_0.50_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 10_000_000 steps (VLM: TRUE, Model: llama3.2)...
+Date: vie 05 jun 2026 01:34:48 CEST
+==================================================
+Launched: NutAssemblySquare | BASELINE_RES_10M_VLM_LLAMA32_0.50_G0.99 | VLM=TRUE | Model=llama3.2 | SEED=2

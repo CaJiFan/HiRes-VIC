@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 # Run NutAssemblySquare experiments using src/train_fixed.py
 run_train() {
     ENV_NAME=$1

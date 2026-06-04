@@ -4,11 +4,8 @@ import numpy as np
 import wandb
 import torch
 from scipy.spatial.transform import Rotation as R
-<<<<<<< HEAD
-=======
 
 
->>>>>>> 412a2c5b285702b32c11bb4249355dde3aa99c5e
 
 class RobosuiteLoggingCallback(BaseCallback):
     """
@@ -176,14 +173,11 @@ class VideoRecorderCallback(BaseCallback):
         frames = []
         teleport_wrapper = self.video_env.env
         teleport_wrapper.frames.clear()
-<<<<<<< HEAD
-=======
 
         reset_out = self.video_env.reset()
         frames += teleport_wrapper.frames
 
         obs = reset_out[0] if isinstance(reset_out, (tuple, list)) else reset_out
->>>>>>> 412a2c5b285702b32c11bb4249355dde3aa99c5e
 
         reset_out = self.video_env.reset()
         frames += teleport_wrapper.frames
