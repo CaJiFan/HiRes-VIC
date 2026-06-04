@@ -26,9 +26,18 @@ import os
 import threading
 import numpy as np
 import yaml
+import re
+import base64
+import io
 from dataclasses import dataclass
 from openai import OpenAI
 from dotenv import load_dotenv
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
 load_dotenv()
 
 # Conversion helpers: physical stiffness values → normalised [-1,1] policy action space
@@ -164,11 +173,15 @@ class LLMImpedancePlanner:
         query_every_n_steps: int = 50,
         prior_weight: float = 0.4,
         profile_path: str | None = None,
-        use_spd_manifold: bool = True, 
+        use_spd_manifold: bool = True,
+        use_vision: bool = False,
+        image_size: tuple = (224, 224),
     ):
         self.model = model or BACKEND_DEFAULTS[backend]
         self.query_every = query_every_n_steps
         self.prior_weight = prior_weight
+        self.use_vision = use_vision
+        self.image_size = image_size
         self._step = 0
         self._history: list[dict] = []
         self._query_in_flight = False
@@ -179,7 +192,7 @@ class LLMImpedancePlanner:
         if profile_path is not None:
             raw_modes, self._system_prompt = _load_profile(profile_path)
             print(f"[LLMImpedancePlanner] Loaded profile from {profile_path} "
-                  f"({len(raw_modes)} phases: {list(raw_modes.keys())}) with spd_manifold={use_spd_manifold}.")
+                  f"({len(raw_modes)} phases: {list(raw_modes.keys())}) with spd_manifold={use_spd_manifold} vision={use_vision}.")
         else:
             print('[LLMImpedancePlanner] No profile_path provided, exiting...')
             return
@@ -203,6 +216,57 @@ class LLMImpedancePlanner:
         else:
             self.client = OpenAI()
 
+    def _parse_mode_string(self, mode_str: str) -> str:
+        """Robustly extract mode name from potentially messy LLM output."""
+        # Strip punctuation and extra whitespace
+        mode_str = re.sub(r'[^\w\s]', '', mode_str).strip().lower()
+        
+        # Try exact match first
+        if mode_str in self._modes:
+            return mode_str
+        
+        # Try substring matching for known phases
+        for known_mode in self._mode_names:
+            if known_mode in mode_str:
+                return known_mode
+        
+        # If first word is a known mode
+        first_word = mode_str.split()[0] if mode_str else ""
+        if first_word in self._modes:
+            return first_word
+        
+        # Default to first mode
+        return self._mode_names[0]
+
+    def _encode_image_to_base64(self, image_array: np.ndarray) -> str:
+        """Convert numpy image array to base64 JPEG for API submission."""
+        if Image is None:
+            print("[LLMImpedancePlanner] PIL not installed, skipping image encoding")
+            return ""
+        
+        try:
+            # Ensure image is in uint8 format
+            if image_array.dtype == np.float32 or image_array.dtype == np.float64:
+                image_array = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
+            else:
+                image_array = np.clip(image_array, 0, 255).astype(np.uint8)
+            
+            # Resize if needed
+            if image_array.shape[:2] != self.image_size:
+                image_pil = Image.fromarray(image_array)
+                image_pil = image_pil.resize(self.image_size, Image.Resampling.LANCZOS)
+            else:
+                image_pil = Image.fromarray(image_array)
+            
+            # Convert to JPEG bytes
+            buffered = io.BytesIO()
+            image_pil.save(buffered, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            return img_str
+        except Exception as e:
+            print(f"[LLMImpedancePlanner] Image encoding failed: {e}")
+            return ""
+
     def _fetch_async(self, state_desc: str):
         """Runs in a background thread. Updates self._last when done."""
         start_time = time.time()
@@ -216,6 +280,8 @@ class LLMImpedancePlanner:
                 messages=[{"role": "system", "content": self._system_prompt}] + history_snapshot,
             )
             mode_str = response.choices[0].message.content.strip().lower()
+            mode_str = self._parse_mode_string(mode_str)
+            print(f"[LLMImpedancePlanner] LLM response: '{mode_str}' in {time.time() - start_time:.2f}s")
             if mode_str not in self._modes:
                 mode_str = self._mode_names[0]
         except Exception as e:
@@ -229,6 +295,89 @@ class LLMImpedancePlanner:
         self._ep_query_count += 1
 
         self._history = history_snapshot + [{"role": "assistant", "content": mode_str}]
+        if len(self._history) > 20:
+            self._history = self._history[-20:]
+
+        m = self._modes[mode_str]
+        self._last = ImpedanceSuggestion(
+            mode=mode_str,
+            action_prior=m["action_prior"].copy(),
+            confidence=self.prior_weight,
+        )
+        self._query_in_flight = False
+
+    def _fetch_async_vision(self, state_desc: str, wrist_image: np.ndarray | None = None, view_image: np.ndarray | None = None):
+        """Runs in a background thread with vision. Updates self._last when done."""
+        start_time = time.time()
+        
+        try:
+            if wrist_image is not None or view_image is not None:
+                # Build multimodal message
+                user_content = []
+                
+                # Add text
+                user_content.append({
+                    "type": "text",
+                    "text": f"Current robot state:\n{state_desc}\n\nAnalyze the images and select the best impedance mode."
+                })
+                
+                # Add wrist image
+                if wrist_image is not None:
+                    img_b64 = self._encode_image_to_base64(wrist_image)
+                    if img_b64:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_b64}",
+                                "detail": "low"
+                            }
+                        })
+                
+                # Add 3rd person image
+                if view_image is not None:
+                    img_b64 = self._encode_image_to_base64(view_image)
+                    if img_b64:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_b64}",
+                                "detail": "low"
+                            }
+                        })
+                
+                messages = [{"role": "system", "content": self._system_prompt}]
+                messages += self._history
+                messages.append({"role": "user", "content": user_content})
+            else:
+                # Fallback to text-only
+                user_msg = f"Current robot state:\n{state_desc}\n\nWhich impedance mode?"
+                messages = [{"role": "system", "content": self._system_prompt}]
+                messages += self._history
+                messages.append({"role": "user", "content": user_msg})
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=20,
+                temperature=0,
+                messages=messages,
+            )
+            mode_str = response.choices[0].message.content.strip().lower()
+            mode_str = self._parse_mode_string(mode_str)
+            print(f"[LLMImpedancePlanner] VLM response: '{mode_str}' in {time.time() - start_time:.2f}s")
+            if mode_str not in self._modes:
+                mode_str = self._mode_names[0]
+        except Exception as e:
+            print(f"[LLMImpedancePlanner] VLM query failed: {e}")
+            mode_str = self._last.mode
+        
+        end_time = time.time()
+        latency = end_time - start_time
+        self._last_latency = latency
+        self._ep_total_llm_time += latency
+        self._ep_query_count += 1
+
+        self._history.append({"role": "user", "content": "images received"})
+        self._history.append({"role": "assistant", "content": mode_str})
         if len(self._history) > 20:
             self._history = self._history[-20:]
 
@@ -269,13 +418,27 @@ class LLMImpedancePlanner:
 
         return "\n".join(lines)
 
-    def query(self, obs_dict: dict) -> ImpedanceSuggestion:
-        """Non-blocking query. Returns last suggestion immediately."""
+    def query(self, obs_dict: dict, wrist_image: np.ndarray | None = None, view_image: np.ndarray | None = None) -> ImpedanceSuggestion:
+        """Non-blocking query. Returns last suggestion immediately.
+        
+        Args:
+            obs_dict: Dictionary of observations
+            wrist_image: Optional wrist camera RGB image (numpy array)
+            view_image: Optional 3rd-person camera RGB image (numpy array)
+        """
         self._step += 1
         if self._step % self.query_every == 0 and not self._query_in_flight:
             self._query_in_flight = True
             state_desc = self._build_state_description(obs_dict)
-            t = threading.Thread(target=self._fetch_async, args=(state_desc,), daemon=True)
+            
+            if self.use_vision and (wrist_image is not None or view_image is not None):
+                t = threading.Thread(
+                    target=self._fetch_async_vision,
+                    args=(state_desc, wrist_image, view_image),
+                    daemon=True
+                )
+            else:
+                t = threading.Thread(target=self._fetch_async, args=(state_desc,), daemon=True)
             t.start()
         return self._last
 
