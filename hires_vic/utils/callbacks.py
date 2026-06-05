@@ -314,8 +314,8 @@ class VideoRecorderCallback(BaseCallback):
     def _capture_multi_camera_frame(self):
         """
         Capture end-effector + scene cameras and compose them side-by-side.
+        Forces both to same height by resizing; ensures consistent output shape.
         Returns a stacked RGB frame (height, width*2, 3) or None if cameras unavailable.
-        Falls back gracefully if stacking fails.
         """
         raw_obs = None
         try:
@@ -342,43 +342,52 @@ class VideoRecorderCallback(BaseCallback):
             if any(x in k_lower for x in ('frontview', 'agentview', 'birdview')) and 'image' in k_lower:
                 scene_img = v
 
-        # If we have both cameras, try to stack them
+        # If we have both cameras, normalize and force same shape
         if eef_img is not None and scene_img is not None:
             try:
                 eef_img_norm = self._normalize_frame(eef_img)
                 scene_img_norm = self._normalize_frame(scene_img)
 
-                # Validate frame shapes before proceeding
+                # Validate normalization succeeded
                 if eef_img_norm is None or scene_img_norm is None:
                     return None
 
-                if eef_img_norm.ndim != 3 or scene_img_norm.ndim != 3:
-                    return None
-
-                if eef_img_norm.shape[2] != 3 or scene_img_norm.shape[2] != 3:
-                    return None
-
-                # Ensure both frames have same height (resize eef to match scene)
-                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
+                # Force both to target height (use scene height as reference)
+                target_height = scene_img_norm.shape[0]
+                
+                # Resize EEF to match scene height, maintaining aspect ratio
+                if eef_img_norm.shape[0] != target_height:
                     try:
                         import cv2
-                        target_height = scene_img_norm.shape[0]
-                        target_width = int(eef_img_norm.shape[1] * target_height / eef_img_norm.shape[0])
-                        eef_img_norm = cv2.resize(eef_img_norm, (target_width, target_height), interpolation=cv2.INTER_LINEAR)
-                    except Exception as resize_err:
-                        # If resize fails, return None (fallback to single camera)
+                        scale = target_height / eef_img_norm.shape[0]
+                        target_width = int(eef_img_norm.shape[1] * scale)
+                        eef_img_norm = cv2.resize(eef_img_norm, (target_width, target_height), 
+                                                 interpolation=cv2.INTER_LINEAR)
+                    except Exception:
+                        return None
+                
+                # Also resize scene to ensure it's exactly target_height
+                # (sometimes source has weird dimensions)
+                if scene_img_norm.shape[0] != target_height:
+                    try:
+                        import cv2
+                        scale = target_height / scene_img_norm.shape[0]
+                        target_width_scene = int(scene_img_norm.shape[1] * scale)
+                        scene_img_norm = cv2.resize(scene_img_norm, (target_width_scene, target_height),
+                                                   interpolation=cv2.INTER_LINEAR)
+                    except Exception:
                         return None
 
-                # Final shape validation before concatenation
-                if eef_img_norm.shape[0] != scene_img_norm.shape[0] or \
-                   eef_img_norm.shape[2] != scene_img_norm.shape[2]:
+                # Final validation before concatenation
+                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
+                    return None
+                if eef_img_norm.shape[2] != 3 or scene_img_norm.shape[2] != 3:
                     return None
 
                 # Stack horizontally: [eef | scene]
                 stacked = np.concatenate([eef_img_norm, scene_img_norm], axis=1)
                 return stacked
             except Exception as e:
-                # Graceful fallback on any error
                 return None
 
         return None
