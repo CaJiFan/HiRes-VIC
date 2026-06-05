@@ -405,7 +405,7 @@ def setup_evaluation_callback(args, run_name):
         eval_env,
         best_model_save_path=f"./logs/best_models/{run_name}/",
         log_path=f"./logs/eval/{run_name}/",
-        eval_freq=max(1_200_000 // args.n_envs, 1),
+        eval_freq=max(8_000 // args.n_envs, 1),
         n_eval_episodes=10, # Run 10 deterministic episodes
         deterministic=True,
         render=False

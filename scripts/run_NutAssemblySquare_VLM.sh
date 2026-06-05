@@ -84,10 +84,10 @@ run_train() {
         ARGS+=(--use_vlm)
         ARGS+=(--vlm_model "$VLM_MODEL")
         # Reduced query interval for faster phase switching in VLM mode
-        ARGS+=(--llm_query_interval 10)
+        ARGS+=(--llm_query_interval 50)
         # Enable cameras explicitly
         ARGS+=(--use_cameras)
-        ARGS+=(--camera_names "wrist,frontview")
+        ARGS+=(--camera_names "robot0_eye_in_hand,frontview")
         ARGS+=(--vlm_image_size 224)
     else
         # Text-only: keep default query interval
@@ -112,7 +112,8 @@ run_train() {
 }
 
 wait_for_queue() {
-    while [ $(jobs -p | wc -l) -gt 1 ]; do
+    # Check running jobs. Loop as long as there is 1 or more running.
+    while [ "$(jobs -pr | wc -l)" -ge 1 ]; do
         sleep 10
     done
 }

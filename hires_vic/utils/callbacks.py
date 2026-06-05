@@ -252,7 +252,7 @@ class VideoRecorderCallback(BaseCallback):
                 obs = step_out
                 done = False
             
-        # print(f"Recorded video of {len(frames)} frames at step {global_step}.")
+        print(f"Recorded video of {len(frames)} frames at step {global_step}.")
         if frames:
             video_array = np.stack(frames, axis=0)
             if video_array.shape[-1] == 4:
