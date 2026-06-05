@@ -265,13 +265,13 @@ class VideoRecorderCallback(BaseCallback):
                 print(f"WandB video upload failed: {e}")
 
     def _capture_frame(self):
-        """Capture a single RGB frame with both wrist and frontview cameras side-by-side."""
-        # Try to get multi-camera view (wrist + frontview)
+        """Capture a single RGB frame with both end-effector and scene cameras side-by-side, with fallback."""
+        # Try multi-camera view first
         multi_frame = self._capture_multi_camera_frame()
         if multi_frame is not None:
             return multi_frame
         
-        # Fallback: single frontview/agentview camera
+        # Fallback: single scene camera (frontview/agentview/etc)
         frame = None
         try:
             frame = self.video_env.render()
@@ -289,37 +289,36 @@ class VideoRecorderCallback(BaseCallback):
                     raw_obs = None
 
             if isinstance(raw_obs, dict):
+                # Try common scene camera names first
                 img_key = None
-                for k in ("frontview_image", "agentview_image"):
+                for k in ("frontview_image", "agentview_image", "birdview_image"):
                     if k in raw_obs:
                         img_key = k
                         break
+                
+                # Fallback: search for any image key
                 if img_key is None:
                     for k in raw_obs.keys():
                         if any(x in k.lower() for x in ("image", "camera", "rgb")):
                             img_key = k
                             break
+                
                 if img_key is not None:
                     try:
                         frame = raw_obs[img_key]
                     except Exception:
                         frame = None
 
+        # Normalize the frame if we found one
         if frame is not None:
-            if isinstance(frame, torch.Tensor):
-                frame = frame.cpu().numpy()
-            frame = np.asarray(frame, dtype=np.uint8)
-            if frame.ndim == 4:
-                frame = frame[0]
-            try:
-                frame = np.flipud(frame)
-            except Exception:
-                pass
+            frame = self._normalize_frame(frame)
+        
         return frame
 
     def _capture_multi_camera_frame(self):
         """
-        Capture wrist + frontview cameras and compose them side-by-side.
+        Capture end-effector + scene cameras and compose them side-by-side.
+        Forces both to same height by resizing; ensures consistent output shape.
         Returns a stacked RGB frame (height, width*2, 3) or None if cameras unavailable.
         """
         raw_obs = None
@@ -334,7 +333,7 @@ class VideoRecorderCallback(BaseCallback):
         if not isinstance(raw_obs, dict):
             return None
 
-        # Look for end-effector and frontview/scene cameras
+        # Look for end-effector and scene cameras
         eef_img = None
         scene_img = None
 
@@ -347,61 +346,92 @@ class VideoRecorderCallback(BaseCallback):
             if any(x in k_lower for x in ('frontview', 'agentview', 'birdview')) and 'image' in k_lower:
                 scene_img = v
 
-        # If we have both cameras, stack them
+        # If we have both cameras, normalize and force same shape
         if eef_img is not None and scene_img is not None:
             try:
                 eef_img_norm = self._normalize_frame(eef_img)
                 scene_img_norm = self._normalize_frame(scene_img)
 
-                # Ensure both frames have same height (resize eef if needed)
-                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
-                    # Resize eef to match scene height
+                # Validate normalization succeeded
+                if eef_img_norm is None or scene_img_norm is None:
+                    return None
+
+                # Force both to target height (use scene height as reference)
+                target_height = scene_img_norm.shape[0]
+                
+                # Resize EEF to match scene height, maintaining aspect ratio
+                if eef_img_norm.shape[0] != target_height:
                     try:
                         import cv2
-                        scale = scene_img_norm.shape[0] / eef_img_norm.shape[0]
-                        new_width = int(eef_img_norm.shape[1] * scale)
-                        eef_img_norm = cv2.resize(eef_img_norm, (new_width, scene_img_norm.shape[0]))
+                        scale = target_height / eef_img_norm.shape[0]
+                        target_width = int(eef_img_norm.shape[1] * scale)
+                        eef_img_norm = cv2.resize(eef_img_norm, (target_width, target_height), 
+                                                 interpolation=cv2.INTER_LINEAR)
                     except Exception:
-                        pass
+                        return None
+                
+                # Also resize scene to ensure it's exactly target_height
+                # (sometimes source has weird dimensions)
+                if scene_img_norm.shape[0] != target_height:
+                    try:
+                        import cv2
+                        scale = target_height / scene_img_norm.shape[0]
+                        target_width_scene = int(scene_img_norm.shape[1] * scale)
+                        scene_img_norm = cv2.resize(scene_img_norm, (target_width_scene, target_height),
+                                                   interpolation=cv2.INTER_LINEAR)
+                    except Exception:
+                        return None
+
+                # Final validation before concatenation
+                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
+                    return None
+                if eef_img_norm.shape[2] != 3 or scene_img_norm.shape[2] != 3:
+                    return None
 
                 # Stack horizontally: [eef | scene]
                 stacked = np.concatenate([eef_img_norm, scene_img_norm], axis=1)
                 return stacked
             except Exception as e:
-                print(f"Multi-camera stacking failed: {e}")
                 return None
 
         return None
 
     def _normalize_frame(self, frame):
-        """Convert frame to normalized uint8 RGB (H, W, 3)."""
-        if isinstance(frame, torch.Tensor):
-            frame = frame.cpu().numpy()
-        frame = np.asarray(frame, dtype=np.uint8)
-        
-        # Handle batch dimension if present
-        if frame.ndim == 4:
-            frame = frame[0]
-        
-        # Handle different channel orderings
-        if frame.ndim == 3:
-            if frame.shape[2] == 4:
-                # RGBA -> RGB
-                frame = frame[..., :3]
-            elif frame.shape[0] == 3:
-                # (3, H, W) -> (H, W, 3)
-                frame = np.transpose(frame, (1, 2, 0))
-            elif frame.shape[0] == 4:
-                # (4, H, W) RGBA -> (H, W, 3) RGB
-                frame = np.transpose(frame, (1, 2, 0))[..., :3]
-        
-        # Flip vertically (standard Robosuite convention)
+        """Convert frame to normalized uint8 RGB (H, W, 3), or None if invalid."""
         try:
-            frame = np.flipud(frame)
-        except Exception:
-            pass
+            if isinstance(frame, torch.Tensor):
+                frame = frame.cpu().numpy()
+            frame = np.asarray(frame, dtype=np.uint8)
+            
+            # Handle batch dimension if present
+            if frame.ndim == 4:
+                frame = frame[0]
+            
+            # Handle different channel orderings
+            if frame.ndim == 3:
+                if frame.shape[2] == 4:
+                    # RGBA -> RGB
+                    frame = frame[..., :3]
+                elif frame.shape[0] == 3:
+                    # (3, H, W) -> (H, W, 3)
+                    frame = np.transpose(frame, (1, 2, 0))
+                elif frame.shape[0] == 4:
+                    # (4, H, W) RGBA -> (H, W, 3) RGB
+                    frame = np.transpose(frame, (1, 2, 0))[..., :3]
+            
+            # Ensure we have (H, W, 3) at this point
+            if frame.ndim != 3 or frame.shape[2] != 3:
+                return None
+            
+            # Flip vertically (standard Robosuite convention)
+            try:
+                frame = np.flipud(frame)
+            except Exception:
+                pass
 
-        return frame
+            return frame
+        except Exception:
+            return None
 
     def _determine_action_indices(self):
         action_dim = int(self.video_env.action_space.shape[-1])
