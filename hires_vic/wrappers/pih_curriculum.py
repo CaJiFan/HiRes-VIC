@@ -298,66 +298,216 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         super().__init__(env)
         self.setup_steps = setup_steps
         self.is_eval = is_eval
+        self.env = env
         self.frames = [] # For debugging: capture frames during the setup phase
     
     def _capture_frame(self):
-        """Capture a single RGB frame from the video env (render or raw obs fallback)."""
+        """Capture a single RGB frame with both end-effector and scene cameras side-by-side, with fallback."""
+        # Try multi-camera view first
+        multi_frame = self._capture_multi_camera_frame()
+        if multi_frame is not None:
+            return multi_frame
+        
+        # Fallback: single scene camera (frontview/agentview/etc)
+        # print('Multi-camera capture failed, falling back to single camera view.')
         frame = None
         try:
             frame = self.env.render()
-        except Exception:
+        except Exception as e:
+            # print(f"Error occurred while rendering video: {e}")
             frame = None
 
         if frame is None:
             raw_obs = None
             try:
                 raw_obs = self.env.env.unwrapped._get_observations()
-            except Exception:
+            except Exception as e:
+                # print(f"Error occurred while fetching observations: {e}")
                 try:
                     raw_obs = self.env.unwrapped._get_observations()
-                except Exception:
+                except Exception as e2:
+                    # print(f"Error occurred while fetching observations (fallback): {e2}")
                     raw_obs = None
 
             if isinstance(raw_obs, dict):
+                # print(raw_obs.keys())
+                # Try common scene camera names first
                 img_key = None
-                for k in ("frontview_image", "agentview_image"):
+                for k in ("frontview_image", "agentview_image", "birdview_image"):
                     if k in raw_obs:
                         img_key = k
                         break
+                
+                # Fallback: search for any image key
                 if img_key is None:
                     for k in raw_obs.keys():
                         if any(x in k.lower() for x in ("image", "camera", "rgb")):
                             img_key = k
                             break
+                
                 if img_key is not None:
                     try:
                         frame = raw_obs[img_key]
-                    except Exception:
+                    except Exception as e:
+                        print(f"Error occurred while fetching image: {e}")
                         frame = None
 
+        # Normalize the frame if we found one
         if frame is not None:
+            frame = self._normalize_frame(frame)
+
+        # print('Captured frame shape:', frame.shape if frame is not None else None)
+        
+        return frame
+
+    def _capture_multi_camera_frame(self):
+        """
+        Capture end-effector + scene cameras and compose them side-by-side.
+        Forces both to same height by resizing; ensures consistent output shape.
+        Returns a stacked RGB frame (height, width*2, 3) or None if cameras unavailable.
+        """
+        raw_obs = None
+        try:
+            raw_obs = self.env.unwrapped._get_observations()
+        except Exception:
+            try:
+                raw_obs = self.env.env.unwrapped._get_observations()
+            except Exception:
+                raw_obs = None
+
+        if not isinstance(raw_obs, dict):
+            return None
+
+        # Look for end-effector and scene cameras
+        eef_img = None
+        scene_img = None
+
+        for k, v in raw_obs.items():
+            k_lower = k.lower()
+            # End-effector camera: "wrist", "eye_in_hand", "robot0_eye_in_hand", "eef"
+            if any(x in k_lower for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in k_lower:
+                # print(f'Found end-effector camera: {k}')
+                eef_img = v
+            # Scene camera: "frontview", "agentview", "birdview"
+            if any(x in k_lower for x in ('frontview', 'agentview', 'birdview')) and 'image' in k_lower:
+                # print(f'Found scene camera: {k}')
+                scene_img = v
+
+        # print(f'End-effector image shape: {eef_img.shape if eef_img is not None else None}')
+        # print(f'Scene image shape: {scene_img.shape if scene_img is not None else None}')
+        # If we have both cameras, normalize and force same shape
+        if eef_img is not None and scene_img is not None:
+            try:
+                eef_img_norm = self._normalize_frame(eef_img)
+                scene_img_norm = self._normalize_frame(scene_img)
+
+                # Validate normalization succeeded
+                if eef_img_norm is None or scene_img_norm is None:
+                    return None
+
+                # Force both to target height (use scene height as reference)
+                target_height = scene_img_norm.shape[0]
+                
+                # Resize EEF to match scene height, maintaining aspect ratio
+                if eef_img_norm.shape[0] != target_height:
+                    try:
+                        import cv2
+                        scale = target_height / eef_img_norm.shape[0]
+                        target_width = int(eef_img_norm.shape[1] * scale)
+                        eef_img_norm = cv2.resize(eef_img_norm, (target_width, target_height), 
+                                                    interpolation=cv2.INTER_LINEAR)
+                    except Exception as e:
+                        print('Failed to resize end-effector image', e)
+                        return None
+                
+                # Also resize scene to ensure it's exactly target_height
+                # (sometimes source has weird dimensions)
+                if scene_img_norm.shape[0] != target_height:
+                    try:
+                        import cv2
+                        scale = target_height / scene_img_norm.shape[0]
+                        target_width_scene = int(scene_img_norm.shape[1] * scale)
+                        scene_img_norm = cv2.resize(scene_img_norm, (target_width_scene, target_height),
+                                                    interpolation=cv2.INTER_LINEAR)
+                    except Exception as e:
+                        print('Failed to resize scene image', e)
+                        return None
+
+                # Final validation before concatenation
+                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
+                    return None
+                if eef_img_norm.shape[2] != 3 or scene_img_norm.shape[2] != 3:
+                    return None
+
+                # Stack horizontally: [eef | scene]
+                stacked = np.concatenate([eef_img_norm, scene_img_norm], axis=1)
+                return stacked
+            except Exception as e:
+                print('Error processing multi-camera images', e)
+                return None
+
+        return None
+
+    def _normalize_frame(self, frame):
+        """Convert frame to normalized uint8 RGB (H, W, 3), or None if invalid."""
+        try:
             if isinstance(frame, torch.Tensor):
                 frame = frame.cpu().numpy()
             frame = np.asarray(frame, dtype=np.uint8)
+            
+            # print(frame.shape, frame.dtype, frame.ndim)
+            # Handle batch dimension if present
             if frame.ndim == 4:
                 frame = frame[0]
+            
+            # Handle different channel orderings
+            if frame.ndim == 3:
+                if frame.shape[2] == 4:
+                    # RGBA -> RGB
+                    frame = frame[..., :3]
+                elif frame.shape[0] == 3:
+                    # (3, H, W) -> (H, W, 3)
+                    frame = np.transpose(frame, (1, 2, 0))
+                elif frame.shape[0] == 4:
+                    # (4, H, W) RGBA -> (H, W, 3) RGB
+                    frame = np.transpose(frame, (1, 2, 0))[..., :3]
+            
+            # Ensure we have (H, W, 3) at this point
+            if frame.ndim != 3 or frame.shape[2] != 3:
+                return None
+            
+            # Flip vertically (standard Robosuite convention)
             try:
                 frame = np.flipud(frame)
-            except Exception:
-                pass
-        return frame
+            except Exception as e:
+                print('Error flipping frame', e)
+
+            return frame
+        except Exception as e:
+            print('Error normalizing frame', e)
+            return None
 
     def reset(self, **kwargs):
-        geom_ptr = self.env
-        while hasattr(geom_ptr, 'env') and not hasattr(geom_ptr, 'llm_planner'):
-            geom_ptr = geom_ptr.env
-            
-        # Save the actual planner object and set it to None in the wrapper
+        self.frames.clear() # Clear any old frames from previous episodes
+        parent = self.env
+        geometric_wrapper = None
+        
+        # Traverse until we find the GeometricWrapper (which holds the planner)
+        while parent is not None:
+            if hasattr(parent, 'llm_planner'):
+                geometric_wrapper = parent
+                break
+            # If we hit the base Robosuite env, we stop
+            if not hasattr(parent, 'env'):
+                break
+            parent = parent.env
+
+        # 2. Save and clear the planner object
         original_planner = None
-        if hasattr(geom_ptr, 'llm_planner'):
-            print('Temporarily removing planner object in the wrapper during reset to prevent interference with scripted setup.')
-            original_planner = geom_ptr.llm_planner
-            geom_ptr.llm_planner = None
+        if geometric_wrapper is not None:
+            print('Temporarily removing planner object in GeometricWrapper during reset.')
+            original_planner = geometric_wrapper.llm_planner
+            geometric_wrapper.llm_planner = None
 
         print('Resetting...')
         obs = self.env.reset(**kwargs)
@@ -391,21 +541,30 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             noise_y = np.random.uniform(-0.020, 0.020)
             
             # Hover ~12cm above the base of the peg
-            hover_target = peg_base_pos + np.array([noise_x-0.048, noise_y, 0.12])
+            # hover_target = peg_base_pos + np.array([noise_x-0.048, noise_y, 0.12])
+            # hover_target = peg_base_pos + np.array([-0.048, -0.010, 0.12])
+            # hover_target = peg_base_pos + np.array([-0.024, -0.002, 0.14])
+            hover_target = peg_base_pos + np.array([-0.00, -0.005, 0.15])
         except Exception as e:
             print("Peg hover target generation failed! Check the peg body name.", e)
             hover_target = eef_pos 
 
-        action_dim = self.env.action_space.shape[0] # Expects raw 7D array
+        # action_dim = self.env.action_space.shape[0] # Expects raw 7D array
+        action_dim = self.env.unwrapped.action_dim
         
         for dummy_t in range(self.setup_steps):
             scripted_action = np.zeros(action_dim, dtype=np.float32)
             current_eef = self.env.unwrapped._get_observations()['robot0_eef_pos']
             gain = 10.0
-            mid_target = hover_target + np.array([0.0, 0.0, 0.04]) 
+            # mid_target = hover_target + np.array([0.0, 0.0, 0.02]) 
+            mid_target = hover_target + np.array([0.0, 0.0, 0.05]) 
 
-            if dummy_t < self.setup_steps // 2.75:
+            phase = dummy_t / self.setup_steps
+
+            if phase < 0.5:
                 pos_error = (mid_target - current_eef)
+            elif phase < 0.75:
+                pos_error = (mid_target + np.array([0.0, 0.0, -0.025]) - current_eef)
             else:
                 pos_error = (hover_target - current_eef)
             
@@ -416,10 +575,17 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
                 scripted_action[0:pos_idx] = np.array([-0.89, -0.89, -0.52,  -0.8, -0.5, -0.5]) 
                 # 
             else:
-                pos_idx = 9
-                scripted_action[0:pos_idx] = np.array([0.0, -0.0, 0.5, 0, 0, 0, -0.8, -0.5, -0.5]) 
+                # pos_idx = 9
+                # scripted_action[0:pos_idx] = np.array([0.0, -0.0, 0.5, 0, 0, 0, -0.8, -0.5, -0.5]) 
+                pos_idx = 12
+                scripted_action[0:pos_idx] = np.array([17.3205, 0.0, 0.0, 0.0, 17.3205, 0.0, 0.0, 0.0, 72.0843, 30.899, 75.75, 75.75]) 
+            
             scripted_action[pos_idx:pos_idx+3] = np.clip(pos_error, -1.0, 1.0)
+            scripted_action[pos_idx+3:pos_idx+6] = np.array([0.0, 0.0, 0.0])
             scripted_action[-1] = 1.0 
+
+            if dummy_t > self.setup_steps // 2:
+                scripted_action[pos_idx+3:pos_idx+6] = np.array([0.0, 0.005, 0.0]) 
 
             obs, _, _, _, info = self.env.step(scripted_action)
 
@@ -450,9 +616,13 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         except Exception:
             pass
         
-        if hasattr(geom_ptr, 'llm_planner'):
-            print('Restoring original planner object in the wrapper after reset.')
-            geom_ptr.llm_planner = original_planner
+        # if hasattr(geom_ptr, 'llm_planner'):
+            # print('Restoring original planner object in the wrapper after reset.')
+            # geom_ptr.llm_planner = original_planner
+
+        if geometric_wrapper is not None:
+            print('Restoring original planner object.')
+            geometric_wrapper.llm_planner = original_planner
 
         self.unwrapped.timestep = 0
 

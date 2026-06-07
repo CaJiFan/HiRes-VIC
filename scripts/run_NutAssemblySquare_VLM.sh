@@ -125,7 +125,7 @@ wait_for_queue() {
 # This script focuses on VLM performance across different models and configurations
 
 TASK="NutAssemblySquare"
-STEPS=10_000_000
+STEPS=1_000_000
 
 echo "Starting VLM-guided residual RL experiments..."
 echo "Testing: llama3.2 (text+multimodal), llava (vision specialist)"
@@ -138,13 +138,13 @@ for SEED in 3 2 1; do
             # ===== VLM Experiment 1: llama3.2 (native multimodal) =====
             wait_for_queue
             run_train $TASK "TRUE" "TRUE" "TRUE" $STEPS \
-                "FULL_GRL_RES_10M_VLM_LLAMA32_${LLM_WEIGHT}_G${GAMMA}" \
+                "FULL_GRL_RES_Z_10M_VLM_LLAMA32_${LLM_WEIGHT}_G${GAMMA}" \
                 $SEED $LLM_WEIGHT "llama3.2"
 
-            wait_for_queue
-            run_train $TASK "FALSE" "FALSE" "TRUE" $STEPS \
-                "BASELINE_RES_10M_VLM_LLAMA32_${LLM_WEIGHT}_G${GAMMA}" \
-                $SEED $LLM_WEIGHT "llama3.2"
+            # wait_for_queue
+            # run_train $TASK "FALSE" "FALSE" "TRUE" $STEPS \
+            #     "BASELINE_RES_Z_10M_VLM_LLAMA32_${LLM_WEIGHT}_G${GAMMA}" \
+            #     $SEED $LLM_WEIGHT "llama3.2"
 
             # ===== VLM Experiment 2: LLaVA (vision specialist via ollama) =====
             # wait_for_queue

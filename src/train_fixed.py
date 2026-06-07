@@ -72,6 +72,8 @@ DEFAULT_WIPE_TASK_CONFIG = {
 }
 
 
+TELEPORT_STEPS = 150
+
 def load_wipe_task_config():
     cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'configs', 'wipe_task_config.yaml'))
     try:
@@ -157,7 +159,7 @@ def parse_args():
     parser.add_argument("--use_fixed", action="store_true", help="Enable fixed stiffness (no VIC, but still learn the residual on top of the fixed controller)")
     parser.add_argument("--fixed_kp", type=int, default=150, help="Fixed kp value")
     parser.add_argument("--gamma", type=float, default=0.99, help="gamma parameter for SAC algorithm")
-    parser.add_argument("--horizon", type=int, default=150, help="Horizon parameter for SAC algorithm")
+    parser.add_argument("--horizon", type=int, default=170, help="Horizon parameter for SAC algorithm")
 
 
     parser.add_argument("--use_llm_prior", action="store_true")
@@ -175,7 +177,7 @@ def parse_args():
                        help="VLM model to use (for use_vlm=True)")
     parser.add_argument("--use_cameras", action="store_true", 
                        help="Enable camera observations in the environment (required for VLM)")
-    parser.add_argument("--camera_names", type=str, default="wrist,frontview",
+    parser.add_argument("--camera_names", type=str, default="frontview",
                        help="Comma-separated list of camera names to use")
     parser.add_argument("--vlm_image_size", type=int, default=224,
                        help="Image size for VLM (resized to this dimension)")
@@ -234,26 +236,29 @@ def make_video_env(args):
     if task_config is not None:
         task_kwargs['task_config'] = task_config
 
-    # ✅ Parse camera names for video env
-    enable_cameras = args.use_vlm or getattr(args, 'use_cameras', False)
-    camera_names_list = args.camera_names.split(',') if isinstance(args.camera_names, str) else ['wrist', 'frontview']
-    camera_names_list = [c.strip() for c in camera_names_list]
-
+    enable_cameras = True    
     env = suite.make(
         env_name=args.env,
         robots="Panda",
         controller_configs=controller_config,
         has_renderer=False,
         use_object_obs=True,
-        has_offscreen_renderer=True,
-        use_camera_obs=True,
-        camera_names=camera_names_list,
+        has_offscreen_renderer=enable_cameras,  # Enable rendering if cameras needed
+        use_camera_obs=enable_cameras,           # Enable camera observations if requested
+        camera_names=['frontview', 'robot0_eye_in_hand'], 
         reward_shaping=True,
         horizon=args.horizon,
         **task_kwargs
     )
 
     env = GymWrapper(env)
+
+    try:
+        if getattr(args, 'primitive_init', 'none') in ('teleport', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
+            env = RobosuiteTeleportWrapper(env, setup_steps=TELEPORT_STEPS, is_eval=is_eval)
+    except Exception as e:
+        print('Exception setting up primitive', e)
+        pass
     
     # ✅ Determine profile path: use VLM profile if use_vlm is true
     llm_profile_path = args.llm_profile
@@ -278,17 +283,7 @@ def make_video_env(args):
         use_vision=args.use_vlm,  # ✅ NEW: pass vision flag
     )
 
-
-    try:
-        # if getattr(args, 'primitive_init', 'none') in ('scripted', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
-        #     env = RobosuiteScriptedPrimitiveWrapper(env, setup_steps=90, is_eval=is_eval)
-        if getattr(args, 'primitive_init', 'none') in ('teleport', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
-            env = RobosuiteTeleportWrapper(env, setup_steps=140, is_eval=is_eval)
-            env = FixedGripperWrapper(env)
-    except Exception as e:
-        print('Exception setting up primitive', e)
-        pass
-
+    
     return env
 
 def make_env(args, is_eval=False, rank=0, seed=0):
@@ -350,6 +345,17 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         )
         
         env = GymWrapper(env)
+
+        # for the NutAssembly envs 
+        try:
+            # if getattr(args, 'primitive_init', 'none') in ('scripted', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
+            #     env = RobosuiteScriptedPrimitiveWrapper(env, setup_steps=90, is_eval=is_eval)
+            if getattr(args, 'primitive_init', 'none') in ('teleport', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
+                env = RobosuiteTeleportWrapper(env, setup_steps=TELEPORT_STEPS, is_eval=is_eval)
+                # env = FixedGripperWrapper(env)
+        except Exception as e:
+            print(f"Error occurred while initializing primitive wrapper: {e}")
+            pass
         
         # ✅ Determine profile path: use VLM profile if use_vlm is true
         llm_profile_path = args.llm_profile
@@ -374,17 +380,6 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             use_vision=args.use_vlm,  # ✅ NEW: pass vision flag
         )
 
-        # for the NutAssembly envs 
-        try:
-            # if getattr(args, 'primitive_init', 'none') in ('scripted', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
-            #     env = RobosuiteScriptedPrimitiveWrapper(env, setup_steps=90, is_eval=is_eval)
-            if getattr(args, 'primitive_init', 'none') in ('teleport', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
-                env = RobosuiteTeleportWrapper(env, setup_steps=140, is_eval=is_eval)
-                env = FixedGripperWrapper(env)
-        except Exception as e:
-            print(f"Error occurred while initializing primitive wrapper: {e}")
-            pass
-
         # env.reset(seed=seed + rank)
         env.action_space.seed(seed + rank)
         env.observation_space.seed(seed + rank)
@@ -405,7 +400,7 @@ def setup_evaluation_callback(args, run_name):
         eval_env,
         best_model_save_path=f"./logs/best_models/{run_name}/",
         log_path=f"./logs/eval/{run_name}/",
-        eval_freq=max(8_000 // args.n_envs, 1),
+        eval_freq=max(480_000 // args.n_envs, 1),
         n_eval_episodes=10, # Run 10 deterministic episodes
         deterministic=True,
         render=False

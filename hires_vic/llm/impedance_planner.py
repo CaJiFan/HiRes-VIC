@@ -76,47 +76,6 @@ def _mode_to_action_prior(kp_trans: list, kp_rot: list, use_log_space: bool) -> 
     ])
 
 
-# ── Built-in fallback (Robosuite Wipe) ────────────────────────────────────────
-# _WIPE_IMPEDANCE_MODES = {
-#     "approach": {
-#         "kp_trans": [33.0, 33.0, 20.0],
-#         "kp_rot":   [15.0, 15.0, 15.0],
-#         "description": "Pre-contact approach: uniform medium stiffness",
-#     },
-#     "contact_edge": {
-#         "kp_trans": [90.0, 90.0, 12.0],
-#         "kp_rot":   [20.0, 20.0, 10.0],
-#         "description": "Initial contact: stiff lateral XY, compliant normal Z",
-#     },
-#     "wipe": {
-#         "kp_trans": [90.0, 90.0, 12.0],
-#         "kp_rot":   [20.0, 20.0, 10.0],
-#         "description": "Wiping stroke: high XY stiffness, compliant normal Z",
-#     },
-#     "lift": {
-#         "kp_trans": [20.0, 20.0, 55.0],
-#         "kp_rot":   [15.0, 15.0, 15.0],
-#         "description": "Lifting off: stiffen Z for clean withdrawal",
-#     },
-# }
-
-# _WIPE_SYSTEM_PROMPT = """\
-# You are an impedance control expert for a robot performing a wiping task on a flat surface.
-# The robot uses a Variable Impedance Controller: positional stiffness is a full 3x3 SPD \
-# matrix (on the Sym+(3) manifold) and orientation is controlled via SO(3) error.
-
-# At each query you receive: EEF position, whether the robot is in contact, wipe completion %, \
-# and distance to the wipe centroid. Select the best impedance mode for the current phase.
-
-# Available modes:
-#   approach      – moving toward surface, not yet in contact
-#   contact_edge  – just made contact or on edge of surface; establish stable contact
-#   wipe          – actively wiping the surface (any direction)
-#   lift          – lifting off the surface after wiping
-
-# Respond with ONLY the mode name, nothing else."""
-
-
 def _load_profile(profile_path: str) -> tuple[dict, str]:
     """Load impedance modes and system prompt from a YAML profile."""
     with open(profile_path) as f:
@@ -363,7 +322,7 @@ class LLMImpedancePlanner:
             )
             mode_str = response.choices[0].message.content.strip().lower()
             mode_str = self._parse_mode_string(mode_str)
-            print(f"[LLMImpedancePlanner] VLM response: '{mode_str}' in {time.time() - start_time:.2f}s")
+            # print(f"[LLMImpedancePlanner] VLM response: '{mode_str}' in {time.time() - start_time:.2f}s")
             if mode_str not in self._modes:
                 mode_str = self._mode_names[0]
         except Exception as e:

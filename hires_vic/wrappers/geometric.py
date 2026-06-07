@@ -33,6 +33,8 @@ class GeometricWrapper(gym.Wrapper):
     ):
         super().__init__(env)
 
+        self.gym_env = self.env.env
+        self.teleport_wrapper = self.env
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
         self.use_diag_manifold = use_diag_manifold
@@ -108,12 +110,18 @@ class GeometricWrapper(gym.Wrapper):
             | Fixed: {self.use_fixed}
         """)
 
-        action_dim = 6 if self.use_fixed else 12
-        action_dim += 3 if self.use_spd_manifold else 0
+
+        # action_dim = 6 if self.use_fixed else 12
+        # action_dim += 3 if self.use_spd_manifold else 0
+        # action_dim = 9 if self.use_spd_manifold else 6
+
+        self.prior_dim = 6 if self.use_spd_manifold else 3
+        action_dim = self.prior_dim
         
-        gripper_dim = self.env.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
-        if gripper_dim > 0:
-            action_dim += gripper_dim
+        # gripper_dim = self.env.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
+        # gripper_dim = 0 if 'wipe' in self.env.unwrapped.__class__.__name__.lower() else 1
+        # if gripper_dim > 0:
+        #     action_dim += gripper_dim
 
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(action_dim,), dtype=np.float32
@@ -121,7 +129,7 @@ class GeometricWrapper(gym.Wrapper):
         print(f"▶️ Action space strictly set to [-1, 1] with shape: {self.action_space.shape}")
 
         # --- TRUE RESIDUAL RL: STATE TRACKERS ---
-        self.prior_dim = 9 if self.use_spd_manifold else 6
+        
         self.extra_obs_dim = self.prior_dim + 1 # +1 for the confidence weight 'w'
         
         self.current_prior = np.zeros(self.prior_dim, dtype=np.float32)
@@ -225,13 +233,14 @@ class GeometricWrapper(gym.Wrapper):
         if seed is not None:
             np.random.seed(seed)
             
-        obs = self.env.reset()
+        # obs = self.env.reset()
+        obs = self.gym_env.reset()
         flat_obs = self._flatten_obs(obs)
 
         if self.llm_planner is not None:
             self.llm_planner.reset()
             # ✅ FIX: Initialize prior from planner's default suggestion
-            self.current_prior = self.llm_planner._last.action_prior.copy()
+            self.current_prior = self.llm_planner._last.action_prior.copy()[:self.prior_dim]
             self.current_w = self.llm_planner._last.confidence
         else:
             self.current_prior = np.zeros(self.prior_dim, dtype=np.float32)
@@ -287,6 +296,7 @@ class GeometricWrapper(gym.Wrapper):
         # We blend them here BEFORE calculating the Riemannian math.
         action = rl_action.copy()
         if self.llm_planner is not None:
+            # print('prior_dim:', self.prior_dim, self.current_prior.shape, action.shape)
             action[:self.prior_dim] = (1.0 - self.current_w) * action[:self.prior_dim] + (self.current_w * self.current_prior)
 
         if self.use_spd_manifold:
@@ -301,17 +311,27 @@ class GeometricWrapper(gym.Wrapper):
 
             kp_rot_raw = action[6:9]
             kp_rot_scaled = self.min_kp + 0.5 * (kp_rot_raw + 1.0) * (self.max_kp - self.min_kp)
+
+            kp_rot_scaled = np.array([300.0, 300.0, 300.0], dtype=np.float32)
+            trajectory_command = np.array([0.0, 0.0, -0.025, 0.0, 0.0, 0.0], dtype=np.float32)
+            gripper_command = np.array([1.0], dtype=np.float32)
             
             robosuite_action = np.concatenate([
                 kp_matrix.flatten(),    # 9 elements: 3x3 matrix flattened
                 kp_rot_scaled,          # Scaled rotational stiffness
-                action[9:],             # pos + ori + gripper
+                trajectory_command,     # Override pos+ori with a fixed downward trajectory for testing
+                gripper_command         # Override gripper command to always closed for testing
             ])
+
+            # robosuite_action = np.concatenate([
+            #     kp_matrix.flatten(),    # 9 elements: 3x3 matrix flattened
+            #     kp_rot_scaled,          # Scaled rotational stiffness
+            #     action[9:],             # pos + ori + gripper
+            # ])
+
             physical_kp_vals = np.concatenate([np.diag(kp_matrix), kp_rot_scaled])
-            
             kp_matrix_3x3 = kp_matrix
         elif self.use_diag_manifold:
-            print('using spd manifold')
             kp_raw = action[:6].copy()
             log_min, log_max = np.log(self.min_kp), np.log(self.max_kp)
             
@@ -329,29 +349,57 @@ class GeometricWrapper(gym.Wrapper):
             kp_matrix_3x3 = np.diag(kp_scaled[:3])
         elif self.use_fixed:
             # ✅ FIXED BASELINE MATH
-            low, high = self.env.action_space.low, self.env.action_space.high
+            low, high = self.gym_env.action_space.low, self.gym_env.action_space.high
             robosuite_action = low + 0.5 * (action + 1.0) * (high - low)
 
-            robot = self.env.unwrapped.robots[0]
+            robot = self.gym_env.unwrapped.robots[0]
             fixed_kp = robot.composite_controller.part_controller_config['right']['kp']
             physical_kp_vals = np.ones(6) * fixed_kp
             kp_matrix_3x3 = np.diag(physical_kp_vals[:3])
         else:
             # Standard baseline execution
-            low, high = self.env.action_space.low, self.env.action_space.high
-            robosuite_action = low + 0.5 * (action + 1.0) * (high - low)
-            physical_kp_vals = robosuite_action[:6]
+            low, high = self.gym_env.action_space.low, self.gym_env.action_space.high
+            kp_trans_scaled = low[:self.prior_dim] + 0.5 * (action + 1.0) * (high[:self.prior_dim] - low[:self.prior_dim])
+            # physical_kp_vals = robosuite_action[:self.prior_dim]
+            
+            kp_rot_scaled = np.array([300.0, 300.0, 300.0], dtype=np.float32)
+            trajectory_command = np.array([0.0, 0.0, -0.05, 0.0, 0.0, 0.0], dtype=np.float32)
+            gripper_command = np.array([1.0], dtype=np.float32)
+            
+            robosuite_action = np.concatenate([
+                kp_trans_scaled,    # 9 elements: 3x3 matrix flattened
+                kp_rot_scaled,          # Scaled rotational stiffness
+                trajectory_command,     # Override pos+ori with a fixed downward trajectory for testing
+                gripper_command         # Override gripper command to always closed for testing
+            ])
+            
+            # print(kp_trans_scaled.shape, kp_rot_scaled.shape)
+            physical_kp_vals = np.concatenate([kp_trans_scaled, kp_rot_scaled])
             kp_matrix_3x3 = np.diag(physical_kp_vals[:3])
 
+            # print(robosuite_action, physical_kp_vals)
+
+        
         # print('physical_kp_vals: ', physical_kp_vals)
         # check if the env uses a gripper and if so set it to always closed (1.0). The criteria is that if the name is not a wiping
         # env, then we assume it has a gripper that needs to be closed. Allow temporary suppression (e.g., scripted primitives)
-        suppress = getattr(self, 'suppress_forced_gripper', False)
-        if 'wipe' not in self.env.unwrapped.__class__.__name__.lower() and not suppress:
-            robosuite_action[-1] = 1.0
+        # suppress = getattr(self, 'suppress_forced_gripper', False)
+        # print(suppress)
+        # if 'wipe' not in self.env.unwrapped.__class__.__name__.lower() and not suppress:
+        #     # kp_rot_scaled = np.array([300.0, 300.0, 300.0], dtype=np.float32)
+        #     # trajectory_command = np.array([0.0, 0.0, -0.05, 0.0, 0.0, 0.0], dtype=np.float32)
+        #     # gripper_command = np.array([1.0], dtype=np.float32)
+            
+        #     # robosuite_action = np.concatenate([
+        #     #     kp_matrix.flatten(),    # 9 elements: 3x3 matrix flattened
+        #     #     kp_rot_scaled,          # Scaled rotational stiffness
+        #     #     trajectory_command,     # Override pos+ori with a fixed downward trajectory for testing
+        #     #     gripper_command         # Override gripper command to always closed for testing
+        #     # ])
+        #     robosuite_action[-1] = 1.0
             
         # print('Action after processing:', robosuite_action)
-        step_return = self.env.step(robosuite_action)
+        step_return = self.gym_env.step(robosuite_action)
         self.episode_steps += 1
        
         obs, reward, terminated, truncated, info = step_return
@@ -386,12 +434,13 @@ class GeometricWrapper(gym.Wrapper):
                 view_image=self.last_view_image
             )
             self.current_prior = suggestion.action_prior[:self.prior_dim]
+            # print('current prior:', self.current_prior)
             self.current_w = suggestion.confidence
             self._current_llm_mode = suggestion.mode
 
         extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
         flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
-
+        # print('flat obs', flat_obs.shape)
         epsilon = 1e-6
         safe_kp = kp_matrix_3x3 + np.eye(3) * epsilon
         safe_prev_kp = self.prev_Kp + np.eye(3) * epsilon
@@ -447,7 +496,7 @@ class GeometricWrapper(gym.Wrapper):
             info["llm/impedance_mode"] = self._current_llm_mode
             info["llm/prior_confidence"] = self.llm_planner.prior_weight
 
-        raw_success = self.env._check_success()
+        raw_success = self.gym_env._check_success()
         info["is_success"] = bool(raw_success)
 
         if self.is_eval:
@@ -533,7 +582,7 @@ class GeometricWrapper(gym.Wrapper):
                             pass
             
     def check_joint_violations(self):
-        robot = self.env.robots[0]
+        robot = self.gym_env.robots[0]
 
         # Check Safety (Joint Limits)
         try:
@@ -544,7 +593,7 @@ class GeometricWrapper(gym.Wrapper):
             pass
 
     def log_contact_forces(self):
-        robot = self.env.robots[0]
+        robot = self.gym_env.robots[0]
         try:
             ee_force = max([
                 np.linalg.norm(np.array(robot.recent_ee_forcetorques[arm].current[:3]))
