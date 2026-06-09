@@ -301,51 +301,147 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         self.frames = [] # For debugging: capture frames during the setup phase
     
     def _capture_frame(self):
-        """Capture a single RGB frame from the video env (render or raw obs fallback)."""
-        frame = None
-        try:
-            frame = self.env.render()
-        except Exception:
-            frame = None
+        """Capture a single RGB frame with both end-effector and scene cameras side-by-side, with fallback."""
+        # Try multi-camera view first
+        multi_frame = self._capture_multi_camera_frame()
+        if multi_frame is not None:
+            return multi_frame
+        
+        # Fallback: single scene camera (frontview/agen
+        print('fallback to single scene camera')
+        # Normalize the frame if we found one
+        if frame is not None:
+            frame = self._normalize_frame(frame)
+        
+        return frame
 
-        if frame is None:
-            raw_obs = None
+    def _capture_multi_camera_frame(self):
+        """
+        Capture end-effector + scene cameras and compose them side-by-side.
+        Forces both to same height by resizing; ensures consistent output shape.
+        Returns a stacked RGB frame (height, width*2, 3) or None if cameras unavailable.
+        """
+        raw_obs = None
+        try:
+            raw_obs = self.env.unwrapped._get_observations()
+        except Exception:
             try:
                 raw_obs = self.env.env.unwrapped._get_observations()
             except Exception:
-                try:
-                    raw_obs = self.env.unwrapped._get_observations()
-                except Exception:
-                    raw_obs = None
+                raw_obs = None
 
-            if isinstance(raw_obs, dict):
-                img_key = None
-                for k in ("frontview_image", "agentview_image"):
-                    if k in raw_obs:
-                        img_key = k
-                        break
-                if img_key is None:
-                    for k in raw_obs.keys():
-                        if any(x in k.lower() for x in ("image", "camera", "rgb")):
-                            img_key = k
-                            break
-                if img_key is not None:
+        if not isinstance(raw_obs, dict):
+            return None
+
+        # Look for end-effector and scene cameras
+        eef_img = None
+        scene_img = None
+
+        for k, v in raw_obs.items():
+            k_lower = k.lower()
+            # End-effector camera: "wrist", "eye_in_hand", "robot0_eye_in_hand", "eef"
+            if any(x in k_lower for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in k_lower:
+                # print(f'Found end-effector camera: {k}')
+                eef_img = v
+            # Scene camera: "frontview", "agentview", "birdview"
+            if any(x in k_lower for x in ('frontview', 'agentview', 'birdview')) and 'image' in k_lower:
+                # print(f'Found scene camera: {k}')
+                scene_img = v
+
+        # print(f'End-effector image shape: {eef_img.shape if eef_img is not None else None}')
+        # print(f'Scene image shape: {scene_img.shape if scene_img is not None else None}')
+        # If we have both cameras, normalize and force same shape
+        if eef_img is not None and scene_img is not None:
+            try:
+                eef_img_norm = self._normalize_frame(eef_img)
+                scene_img_norm = self._normalize_frame(scene_img)
+
+                # Validate normalization succeeded
+                if eef_img_norm is None or scene_img_norm is None:
+                    return None
+
+                # Force both to target height (use scene height as reference)
+                target_height = scene_img_norm.shape[0]
+                
+                # Resize EEF to match scene height, maintaining aspect ratio
+                if eef_img_norm.shape[0] != target_height:
                     try:
-                        frame = raw_obs[img_key]
-                    except Exception:
-                        frame = None
+                        import cv2
+                        scale = target_height / eef_img_norm.shape[0]
+                        target_width = int(eef_img_norm.shape[1] * scale)
+                        eef_img_norm = cv2.resize(eef_img_norm, (target_width, target_height), 
+                                                    interpolation=cv2.INTER_LINEAR)
+                    except Exception as e:
+                        print('Failed to resize end-effector image', e)
+                        return None
+                
+                # Also resize scene to ensure it's exactly target_height
+                # (sometimes source has weird dimensions)
+                if scene_img_norm.shape[0] != target_height:
+                    try:
+                        import cv2
+                        scale = target_height / scene_img_norm.shape[0]
+                        target_width_scene = int(scene_img_norm.shape[1] * scale)
+                        scene_img_norm = cv2.resize(scene_img_norm, (target_width_scene, target_height),
+                                                    interpolation=cv2.INTER_LINEAR)
+                    except Exception as e:
+                        print('Failed to resize scene image', e)
+                        return None
 
-        if frame is not None:
+                # Final validation before concatenation
+                if eef_img_norm.shape[0] != scene_img_norm.shape[0]:
+                    return None
+                if eef_img_norm.shape[2] != 3 or scene_img_norm.shape[2] != 3:
+                    return None
+
+                # Stack horizontally: [eef | scene]
+                stacked = np.concatenate([eef_img_norm, scene_img_norm], axis=1)
+                return stacked
+            except Exception as e:
+                print('Error processing multi-camera images', e)
+                return None
+
+        return None
+
+    def _normalize_frame(self, frame):
+        """Convert frame to normalized uint8 RGB (H, W, 3), or None if invalid."""
+        try:
             if isinstance(frame, torch.Tensor):
                 frame = frame.cpu().numpy()
             frame = np.asarray(frame, dtype=np.uint8)
+            
+            # print(frame.shape, frame.dtype, frame.ndim)
+            # Handle batch dimension if present
             if frame.ndim == 4:
                 frame = frame[0]
+            
+            # Handle different channel orderings
+            if frame.ndim == 3:
+                if frame.shape[2] == 4:
+                    # RGBA -> RGB
+                    frame = frame[..., :3]
+                elif frame.shape[0] == 3:
+                    # (3, H, W) -> (H, W, 3)
+                    frame = np.transpose(frame, (1, 2, 0))
+                elif frame.shape[0] == 4:
+                    # (4, H, W) RGBA -> (H, W, 3) RGB
+                    frame = np.transpose(frame, (1, 2, 0))[..., :3]
+            
+            # Ensure we have (H, W, 3) at this point
+            if frame.ndim != 3 or frame.shape[2] != 3:
+                return None
+            
+            # Flip vertically (standard Robosuite convention)
             try:
                 frame = np.flipud(frame)
-            except Exception:
-                pass
-        return frame
+            except Exception as e:
+                print('Error flipping frame', e)
+
+            return frame
+        except Exception as e:
+            print('Error normalizing frame', e)
+            return None
+
 
     def reset(self, **kwargs):
         geom_ptr = self.env

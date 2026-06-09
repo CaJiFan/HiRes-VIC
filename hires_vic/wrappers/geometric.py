@@ -368,11 +368,13 @@ class GeometricWrapper(gym.Wrapper):
                     # End-effector camera: "wrist", "eye_in_hand", "robot0_eye_in_hand", etc.
                     if any(x in key.lower() for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in key.lower():
                         img = raw_obs_full[key]
+                        # print(img.shape, key)
                         if isinstance(img, np.ndarray):
                             self.last_wrist_image = img.copy()
                     # Scene camera: "frontview", "agentview", "birdview", etc.
                     if any(x in key.lower() for x in ('frontview', 'agentview', 'birdview')) and 'image' in key.lower():
                         img = raw_obs_full[key]
+                        # print(img.shape, key)
                         if isinstance(img, np.ndarray):
                             self.last_view_image = img.copy()
         except Exception as e:
