@@ -245,7 +245,7 @@ def make_video_env(args):
         use_object_obs=True,
         has_offscreen_renderer=enable_cameras,  # Enable rendering if cameras needed
         use_camera_obs=enable_cameras,           # Enable camera observations if requested
-        camera_names=['frontview', 'robot0_eye_in_hand'], 
+        camera_names=['frontview'], 
         reward_shaping=True,
         horizon=args.horizon,
         **task_kwargs

@@ -1713,3 +1713,91 @@ Starting SAC on NutAssemblySquare for 1_000_000 steps...
 Date: dom 07 jun 2026 15:17:53 CEST
 ==================================================
 Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.99 | SEED=2
+Starting Ollama server on port 11434...
+==================================================
+SMOKE TEST: Verifying Ollama is responding...
+==================================================
+✅ LLM Smoke Test PASSED! The model is loaded and generating text.
+Model Output:
+"response":"Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?"
+==================================================
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 07 jun 2026 19:56:41 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: dom 07 jun 2026 22:24:14 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.50_G0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 00:52:57 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.75_G0.99 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 03:21:50 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.90 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 05:51:13 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.50_G0.90 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 08:17:45 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.75_G0.90 | SEED=3
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 10:47:49 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 13:17:42 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.50_G0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 15:45:25 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.75_G0.99 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 18:16:18 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.90 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 20:47:11 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.50_G0.90 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: lun 08 jun 2026 23:15:14 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.75_G0.90 | SEED=2
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: mar 09 jun 2026 01:46:07 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.99 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: mar 09 jun 2026 04:14:10 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.50_G0.99 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: mar 09 jun 2026 06:43:53 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.75_G0.99 | SEED=1
+==================================================
+Starting SAC on NutAssemblySquare for 1_000_000 steps...
+Date: mar 09 jun 2026 09:13:16 CEST
+==================================================
+Launched: NutAssemblySquare | FULL_GRL_RES_Z_10M_LLM0.25_G0.90 | SEED=1
