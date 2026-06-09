@@ -170,11 +170,23 @@ class VideoRecorderCallback(BaseCallback):
 
     def _record_video(self, global_step: int):
         # Single deterministic episode
+        teleport_wrapper = None
+        ptr = self.video_env
+        while hasattr(ptr, 'env'):
+            if "Teleport" in type(ptr).__name__:
+                teleport_wrapper = ptr
+                break
+            ptr = ptr.env
+        
+        if teleport_wrapper is None:
+            print("TeleportWrapper not found in stack!")
+            return
         frames = []
         teleport_wrapper = self.video_env.env
         teleport_wrapper.frames.clear()
 
         reset_out = self.video_env.reset()
+        teleport_wrapper.reset()
         frames += teleport_wrapper.frames
 
         obs = reset_out[0] if isinstance(reset_out, (tuple, list)) else reset_out
@@ -184,7 +196,8 @@ class VideoRecorderCallback(BaseCallback):
             try:
                 if hasattr(self.video_env, '_flatten_obs'):
                     return self.video_env._flatten_obs(raw_obs)
-            except Exception:
+            except Exception as e:
+                print(f"Wrapper flattening failed: {e}")
                 pass
 
             # Fallback: try to remove image/camera keys from a dict-like obs
@@ -199,7 +212,8 @@ class VideoRecorderCallback(BaseCallback):
                     parts = [np.asarray(v).flatten() for v in filtered.values()]
                     if parts:
                         return np.concatenate(parts).astype(np.float32)
-                except Exception:
+                except Exception as e:
+                    print(f"Failed to flatten observation: {e}")
                     pass
 
             return candidate
@@ -235,7 +249,7 @@ class VideoRecorderCallback(BaseCallback):
             except Exception as e:
                 # Best-effort fallback
                 action, _ = self.model.predict(obs, deterministic=True)
-
+            
             # Step environment
             step_out = self.video_env.step(action)
             if len(step_out) == 5:
@@ -248,14 +262,44 @@ class VideoRecorderCallback(BaseCallback):
                 obs = step_out
                 done = False
             
-        # print(f"Recorded video of {len(frames)} frames at step {global_step}.")
+        print(f"Recorded video of {len(frames)} frames at step {global_step}.")
         if frames:
-            video_array = np.stack(frames, axis=0)
-            if video_array.shape[-1] == 4:
-                # RGBA -> RGB
-                video_array = video_array[..., :3]
-            video_array = np.transpose(video_array, (0, 3, 1, 2))
+            # Filter out None frames and frames with shape mismatches
+            valid_frames = []
+            target_shape = None
+            
+            for frame in frames:
+                if frame is None or not isinstance(frame, np.ndarray):
+                    continue
+                if frame.ndim != 3 or frame.shape[2] != 3:
+                    continue
+                if target_shape is None:
+                    target_shape = frame.shape[:2]  # (H, W)
+                    valid_frames.append(frame)
+                else:
+                    # Resize frame to match target shape
+                    if frame.shape[:2] != target_shape:
+                        try:
+                            import cv2
+                            resized = cv2.resize(frame, (target_shape[1], target_shape[0]), 
+                                               interpolation=cv2.INTER_LINEAR)
+                            valid_frames.append(resized)
+                        except Exception:
+                            continue
+                    else:
+                        valid_frames.append(frame)
+            
+            if not valid_frames:
+                print(f"No valid frames to record (out of {len(frames)} total)")
+                return
+            
+            print(f"Using {len(valid_frames)} valid frames (shape {valid_frames[0].shape})")
             try:
+                video_array = np.stack(valid_frames, axis=0)
+                if video_array.shape[-1] == 4:
+                    # RGBA -> RGB
+                    video_array = video_array[..., :3]
+                video_array = np.transpose(video_array, (0, 3, 1, 2))
                 wandb.log({"eval/video": wandb.Video(video_array, fps=self.fps, format="mp4")}, step=global_step)
             except Exception as e:
                 print(f"WandB video upload failed: {e}")

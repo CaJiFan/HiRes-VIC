@@ -298,6 +298,7 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         super().__init__(env)
         self.setup_steps = setup_steps
         self.is_eval = is_eval
+        self.env = env
         self.frames = [] # For debugging: capture frames during the setup phase
     
     def _capture_frame(self):
@@ -307,11 +308,55 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         if multi_frame is not None:
             return multi_frame
         
-        # Fallback: single scene camera (frontview/agen
-        print('fallback to single scene camera')
+        # Fallback: single scene camera (frontview/agentview/etc)
+        # print('Multi-camera capture failed, falling back to single camera view.')
+        frame = None
+        try:
+            frame = self.env.render()
+        except Exception as e:
+            # print(f"Error occurred while rendering video: {e}")
+            frame = None
+
+        if frame is None:
+            raw_obs = None
+            try:
+                raw_obs = self.env.env.unwrapped._get_observations()
+            except Exception as e:
+                # print(f"Error occurred while fetching observations: {e}")
+                try:
+                    raw_obs = self.env.unwrapped._get_observations()
+                except Exception as e2:
+                    # print(f"Error occurred while fetching observations (fallback): {e2}")
+                    raw_obs = None
+
+            if isinstance(raw_obs, dict):
+                # print(raw_obs.keys())
+                # Try common scene camera names first
+                img_key = None
+                for k in ("frontview_image", "agentview_image", "birdview_image"):
+                    if k in raw_obs:
+                        img_key = k
+                        break
+                
+                # Fallback: search for any image key
+                if img_key is None:
+                    for k in raw_obs.keys():
+                        if any(x in k.lower() for x in ("image", "camera", "rgb")):
+                            img_key = k
+                            break
+                
+                if img_key is not None:
+                    try:
+                        frame = raw_obs[img_key]
+                    except Exception as e:
+                        print(f"Error occurred while fetching image: {e}")
+                        frame = None
+
         # Normalize the frame if we found one
         if frame is not None:
             frame = self._normalize_frame(frame)
+
+        # print('Captured frame shape:', frame.shape if frame is not None else None)
         
         return frame
 
@@ -442,18 +487,27 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             print('Error normalizing frame', e)
             return None
 
-
     def reset(self, **kwargs):
-        geom_ptr = self.env
-        while hasattr(geom_ptr, 'env') and not hasattr(geom_ptr, 'llm_planner'):
-            geom_ptr = geom_ptr.env
-            
-        # Save the actual planner object and set it to None in the wrapper
+        self.frames.clear() # Clear any old frames from previous episodes
+        parent = self.env
+        geometric_wrapper = None
+        
+        # Traverse until we find the GeometricWrapper (which holds the planner)
+        while parent is not None:
+            if hasattr(parent, 'llm_planner'):
+                geometric_wrapper = parent
+                break
+            # If we hit the base Robosuite env, we stop
+            if not hasattr(parent, 'env'):
+                break
+            parent = parent.env
+
+        # 2. Save and clear the planner object
         original_planner = None
-        if hasattr(geom_ptr, 'llm_planner'):
-            print('Temporarily removing planner object in the wrapper during reset to prevent interference with scripted setup.')
-            original_planner = geom_ptr.llm_planner
-            geom_ptr.llm_planner = None
+        if geometric_wrapper is not None:
+            print('Temporarily removing planner object in GeometricWrapper during reset.')
+            original_planner = geometric_wrapper.llm_planner
+            geometric_wrapper.llm_planner = None
 
         print('Resetting...')
         obs = self.env.reset(**kwargs)
@@ -487,21 +541,30 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             noise_y = np.random.uniform(-0.020, 0.020)
             
             # Hover ~12cm above the base of the peg
-            hover_target = peg_base_pos + np.array([noise_x-0.048, noise_y, 0.12])
+            # hover_target = peg_base_pos + np.array([noise_x-0.048, noise_y, 0.12])
+            # hover_target = peg_base_pos + np.array([-0.048, -0.010, 0.12])
+            # hover_target = peg_base_pos + np.array([-0.024, -0.002, 0.14])
+            hover_target = peg_base_pos + np.array([-0.00, -0.005, 0.15])
         except Exception as e:
             print("Peg hover target generation failed! Check the peg body name.", e)
             hover_target = eef_pos 
 
-        action_dim = self.env.action_space.shape[0] # Expects raw 7D array
+        # action_dim = self.env.action_space.shape[0] # Expects raw 7D array
+        action_dim = self.env.unwrapped.action_dim
         
         for dummy_t in range(self.setup_steps):
             scripted_action = np.zeros(action_dim, dtype=np.float32)
             current_eef = self.env.unwrapped._get_observations()['robot0_eef_pos']
             gain = 10.0
-            mid_target = hover_target + np.array([0.0, 0.0, 0.04]) 
+            # mid_target = hover_target + np.array([0.0, 0.0, 0.02]) 
+            mid_target = hover_target + np.array([0.0, 0.0, 0.05]) 
 
-            if dummy_t < self.setup_steps // 2.75:
+            phase = dummy_t / self.setup_steps
+
+            if phase < 0.5:
                 pos_error = (mid_target - current_eef)
+            elif phase < 0.75:
+                pos_error = (mid_target + np.array([0.0, 0.0, -0.025]) - current_eef)
             else:
                 pos_error = (hover_target - current_eef)
             
@@ -512,10 +575,17 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
                 scripted_action[0:pos_idx] = np.array([-0.89, -0.89, -0.52,  -0.8, -0.5, -0.5]) 
                 # 
             else:
-                pos_idx = 9
-                scripted_action[0:pos_idx] = np.array([0.0, -0.0, 0.5, 0, 0, 0, -0.8, -0.5, -0.5]) 
+                # pos_idx = 9
+                # scripted_action[0:pos_idx] = np.array([0.0, -0.0, 0.5, 0, 0, 0, -0.8, -0.5, -0.5]) 
+                pos_idx = 12
+                scripted_action[0:pos_idx] = np.array([17.3205, 0.0, 0.0, 0.0, 17.3205, 0.0, 0.0, 0.0, 72.0843, 30.899, 75.75, 75.75]) 
+            
             scripted_action[pos_idx:pos_idx+3] = np.clip(pos_error, -1.0, 1.0)
+            scripted_action[pos_idx+3:pos_idx+6] = np.array([0.0, 0.0, 0.0])
             scripted_action[-1] = 1.0 
+
+            if dummy_t > self.setup_steps // 2:
+                scripted_action[pos_idx+3:pos_idx+6] = np.array([0.0, 0.005, 0.0]) 
 
             obs, _, _, _, info = self.env.step(scripted_action)
 
@@ -546,9 +616,13 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
         except Exception:
             pass
         
-        if hasattr(geom_ptr, 'llm_planner'):
-            print('Restoring original planner object in the wrapper after reset.')
-            geom_ptr.llm_planner = original_planner
+        # if hasattr(geom_ptr, 'llm_planner'):
+            # print('Restoring original planner object in the wrapper after reset.')
+            # geom_ptr.llm_planner = original_planner
+
+        if geometric_wrapper is not None:
+            print('Restoring original planner object.')
+            geometric_wrapper.llm_planner = original_planner
 
         self.unwrapped.timestep = 0
 
