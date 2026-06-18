@@ -100,10 +100,20 @@ class RobosuiteLoggingCallback(BaseCallback):
                     ("llm/total_queries",                 "llm/total_queries"),
                     ("llm/total_latency_seconds",         "llm/total_latency_seconds"),
                     ("llm/avg_latency_seconds",           "llm/avg_latency_seconds"),
+                    ("llm/phase_transitions",             "llm/phase_transitions"),
+                    ("llm/avg_phase_duration_steps",      "llm/avg_phase_duration_steps"),
+                    ("llm/effective_prior_weight",        "llm/effective_prior_weight"),
                     # Task-specific (present only for the relevant task)
                     ("physics/raw_wipe_percentage",       "physics/raw_wipe_percentage"),
                     ("physics/insertion_depth",           "physics/insertion_depth"),
                     ("physics/peg_aligned",               "physics/peg_aligned"),
+                    # Door-specific
+                    ("physics/door_success",              "physics/door_success"),
+                    ("physics/door_angle_deg",            "physics/door_angle_deg"),
+                    ("physics/handle_grasped",            "physics/handle_grasped"),
+                    ("physics/is_success",                "physics/is_success"),
+                    # Generic success (EvalCallback sets this in info)
+                    ("is_success",                        "physics/is_success"),
                     # Safety
                     ("physics/max_force_violation_count", "safety/max_force_violations"),
                     ("physics/joint_violation_count",     "safety/joint_violations"),
@@ -116,6 +126,11 @@ class RobosuiteLoggingCallback(BaseCallback):
                     ("physics/kp_rot_y_avg",              "physics/kp_rot_y_avg"),
                     ("physics/kp_rot_z_avg",              "physics/kp_rot_z_avg"),
                     ("safety/joint_violation",            "safety/joint_violations"),
+                    # New safety / engagement metrics
+                    ("safety/force_exceedance_count",     "safety/force_exceedance_count"),
+                    ("safety/force_exceedance_rate",      "safety/force_exceedance_rate"),
+                    ("safety/peak_force",                 "safety/peak_force"),
+                    ("physics/door_contact_rate",         "physics/door_contact_rate"),
                 ]
                 for key, log_key in _METRIC_KEYS:
                     if key in info:
@@ -170,6 +185,7 @@ class VideoRecorderCallback(BaseCallback):
 
     def _record_video(self, global_step: int):
         # Single deterministic episode
+        # ── Attempt to find TeleportWrapper (only present for NutAssembly) ──
         teleport_wrapper = None
         ptr = self.video_env
         while hasattr(ptr, 'env'):
@@ -177,17 +193,19 @@ class VideoRecorderCallback(BaseCallback):
                 teleport_wrapper = ptr
                 break
             ptr = ptr.env
-        
-        if teleport_wrapper is None:
-            print("TeleportWrapper not found in stack!")
-            return
-        frames = []
-        teleport_wrapper = self.video_env.env
-        teleport_wrapper.frames.clear()
 
-        reset_out = self.video_env.reset()
-        teleport_wrapper.reset()
-        frames += teleport_wrapper.frames
+        frames = []
+
+        if teleport_wrapper is not None:
+            # NutAssembly path: collect teleport animation frames first
+            teleport_wrapper = self.video_env.env
+            teleport_wrapper.frames.clear()
+            reset_out = self.video_env.reset()
+            teleport_wrapper.reset()
+            frames += teleport_wrapper.frames
+        else:
+            # Door / Wipe / generic path: no teleport, just reset
+            reset_out = self.video_env.reset()
 
         obs = reset_out[0] if isinstance(reset_out, (tuple, list)) else reset_out
 
@@ -232,14 +250,17 @@ class VideoRecorderCallback(BaseCallback):
             if has_primitive_wrapper:
                 print(f"Video env already contains primitive wrapper, skipping manual execution.")
             else:
-                obs = self._run_visual_primitive(frames, obs)
+                # obs = self._run_visual_primitive(frames, obs)
+                print('Working with ', type(env_ptr).__name__)
 
-        
         done = False
+        step_reward = 0.0
+        step_success = False
         while not done:
-            # Capture frame
+            # Capture frame and annotate with step-level reward + success state
             frame = self._capture_frame()
             if frame is not None:
+                frame = self._annotate_frame(frame, step_reward, step_success)
                 frames.append(frame)
 
             # Predict action
@@ -253,16 +274,33 @@ class VideoRecorderCallback(BaseCallback):
             # Step environment
             step_out = self.video_env.step(action)
             if len(step_out) == 5:
-                obs, _, terminated, truncated, _ = step_out
+                obs, step_reward, terminated, truncated, step_info = step_out
+                step_success = bool(step_info.get('is_success', False))
                 done = bool(terminated or truncated)
             elif len(step_out) == 4:
-                obs, _, terminated, info = step_out
+                obs, step_reward, terminated, step_info = step_out
+                step_success = bool(step_info.get('is_success', False))
                 done = bool(terminated)
             else:
                 obs = step_out
                 done = False
             
-        print(f"Recorded video of {len(frames)} frames at step {global_step}.")
+        # ── Terminal frame ────────────────────────────────────────────────────
+        # The loop captures frames BEFORE each step, so the success state that
+        # triggered termination is never shown in the loop body. Capture the
+        # final environment state here and annotate it correctly.
+        final_frame = self._capture_frame()
+        if final_frame is not None:
+            final_frame = self._annotate_frame(final_frame, step_reward, step_success)
+            frames.append(final_frame)
+            # If success was achieved, hold the SUCCESS frame for 3 extra frames
+            # so it's clearly visible when scrubbing / watching the video.
+            if step_success:
+                for _ in range(3):
+                    frames.append(final_frame.copy())
+
+        print(f"Recorded video of {len(frames)} frames at step {global_step} "
+              f"(success={step_success}, final_reward={step_reward:.3f}).")
         if frames:
             # Filter out None frames and frames with shape mismatches
             valid_frames = []
@@ -472,6 +510,54 @@ class VideoRecorderCallback(BaseCallback):
             return frame
         except Exception:
             return None
+
+    def _annotate_frame(self, frame: np.ndarray, reward: float, success: bool) -> np.ndarray:
+        """Overlay per-step reward and success state onto a video frame.
+
+        Draws a small semi-transparent banner at the top of the frame with:
+          • Reward: {value}   (green if positive, red if negative)
+          • SUCCESS or RUNNING badge
+
+        Falls back to the unmodified frame if cv2 is unavailable.
+        """
+        try:
+            import cv2
+            frame = frame.copy()
+            h, w = frame.shape[:2]
+
+            # ── banner background ────────────────────────────────────────────
+            banner_h = max(28, h // 14)
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (0, 0), (w, banner_h), (20, 20, 20), -1)
+            cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+
+            # ── font settings ────────────────────────────────────────────────
+            font       = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = max(0.35, banner_h / 60.0)
+            thickness  = 1
+            pad        = max(4, banner_h // 6)
+            text_y     = banner_h - pad
+
+            # ── reward text ──────────────────────────────────────────────────
+            rew_color = (80, 220, 80) if reward >= 0 else (80, 80, 220)  # BGR: green / red
+            rew_text  = f"Reward: {reward:+.3f}"
+            cv2.putText(frame, rew_text, (pad, text_y), font, font_scale, rew_color, thickness, cv2.LINE_AA)
+
+            # ── success badge ────────────────────────────────────────────────
+            if success:
+                badge_text  = "SUCCESS"
+                badge_color = (50, 200, 50)   # BGR green
+            else:
+                badge_text  = "RUNNING"
+                badge_color = (180, 180, 180) # BGR grey
+
+            (bw, _), _ = cv2.getTextSize(badge_text, font, font_scale, thickness)
+            cv2.putText(frame, badge_text, (w - bw - pad, text_y), font, font_scale, badge_color, thickness, cv2.LINE_AA)
+
+            return frame
+        except Exception:
+            return frame  # graceful fallback: return unmodified frame
+
 
     def _determine_action_indices(self):
         action_dim = int(self.video_env.action_space.shape[-1])

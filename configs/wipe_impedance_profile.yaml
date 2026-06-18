@@ -1,0 +1,79 @@
+task: TiltedWipe (Robosuite)
+robot: Panda
+description: >
+  The robot must use a wiping tool attached to its end-effector to clear
+  N dirt markers from a tilted table surface. The table inclination prevents
+  trivial hovering solutions and requires the robot to maintain sustained
+  downward and lateral contact force. The key challenge is combining precise
+  spatial coverage (reaching all markers) with appropriate normal/lateral
+  compliance: too little normal force misses markers; too much risks joint
+  limit violations and surface damage.
+
+phases:
+  approach:
+    # EEF is in free space, moving toward the table/marker area.
+    # Moderate isotropic compliance to avoid hard impacts on first contact.
+    # Slightly stiffer Z (table normal) to control descent speed.
+    kp_trans: [33.0, 33.0, 45.0]
+    kp_rot:   [15.0, 15.0, 15.0]
+    description: >
+      Free-space motion toward the next marker cluster. Moderate compliance
+      prevents bouncing on initial contact with the tilted surface.
+
+  contact_edge:
+    # EEF has just established contact with the table surface.
+    # Stiffen lateral axes (XY) for positional authority over the wipe stroke;
+    # keep Z (surface normal) compliant to absorb surface irregularities and
+    # maintain gentle contact pressure without excessive force.
+    kp_trans: [90.0, 90.0, 12.0]
+    kp_rot:   [20.0, 20.0, 10.0]
+    description: >
+      Initial surface contact. High lateral stiffness provides positional
+      control for the wiping stroke. Low normal stiffness prevents excessive
+      impact force on contact establishment.
+
+  wipe:
+    # EEF is actively wiping across the surface with contact established.
+    # Retain high lateral stiffness for stroke authority; keep Z compliant
+    # so the tool conforms to the tilted surface and maintains contact pressure
+    # throughout the stroke without lifting off.
+    kp_trans: [90.0, 90.0, 12.0]
+    kp_rot:   [20.0, 20.0, 10.0]
+    description: >
+      Active wiping stroke. High lateral stiffness drives the tool across
+      markers. Low normal stiffness maintains gentle, consistent contact
+      pressure on the tilted surface and avoids force spikes.
+
+  lift:
+    # All markers in the current cluster are wiped; robot needs to reposition.
+    # Stiffen Z to lift cleanly off the surface; relax lateral stiffness
+    # to allow free repositioning toward the next cluster.
+    kp_trans: [20.0, 20.0, 55.0]
+    kp_rot:   [15.0, 15.0, 15.0]
+    description: >
+      Lifting off surface to reposition to next marker cluster.
+      High Z stiffness provides clean upward lift; low lateral stiffness
+      allows free repositioning without fighting kinematic constraints.
+
+planner_prompt: |
+  You are an impedance control expert for a robot wiping task in Robosuite.
+
+  The Panda arm uses a wiping tool to clear dirt markers from a tilted table
+  surface. Translational stiffness is a diagonal 3x3 SPD matrix controlling
+  EEF compliance; rotational stiffness controls orientation compliance.
+  The table is tilted — the robot must maintain surface contact actively.
+
+  Available impedance phases:
+    approach     – EEF is in free space, not yet touching the table.
+                   Use when the robot is moving toward the table or a marker.
+    contact_edge – EEF has just made contact with the table surface.
+                   Use on first contact to absorb the impact compliantly.
+    wipe         – EEF is actively wiping across markers on the surface.
+                   Use when in sustained contact and performing the wiping stroke.
+    lift         – Current marker cluster is cleared; robot is repositioning.
+                   Use when lifting off to move to the next unwiped area.
+
+  You will receive: EEF position, surface contact flag (True/False),
+  wipe completion fraction (0.0–1.0), distance to wipe centroid.
+  Respond with ONLY the exact phase name: approach | contact_edge | wipe | lift.
+  No explanation, no punctuation — just the phase name.

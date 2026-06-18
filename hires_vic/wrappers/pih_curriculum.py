@@ -536,15 +536,13 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             peg_id = sim.model.body_name2id(peg_key)
             peg_base_pos = np.array(sim.data.body_xpos[peg_id])
             
-            # Curriculum Noise: +/- 2.0cm offset so the RL agent is forced to search!
-            noise_x = np.random.uniform(-0.020, 0.020)
-            noise_y = np.random.uniform(-0.020, 0.020)
+            # Curriculum Noise: +/- 1cm offset so the RL agent is forced to search and rely on compliance!
+            noise_range = 0.010
+            noise_x = np.random.uniform(-noise_range, noise_range)
+            noise_y = np.random.uniform(-noise_range, noise_range)
             
-            # Hover ~12cm above the base of the peg
-            # hover_target = peg_base_pos + np.array([noise_x-0.048, noise_y, 0.12])
-            # hover_target = peg_base_pos + np.array([-0.048, -0.010, 0.12])
-            # hover_target = peg_base_pos + np.array([-0.024, -0.002, 0.14])
-            hover_target = peg_base_pos + np.array([-0.00, -0.005, 0.15])
+            # Hover above the base of the peg with random misalignment
+            hover_target = peg_base_pos + np.array([noise_x, noise_y - 0.005, 0.15])
         except Exception as e:
             print("Peg hover target generation failed! Check the peg body name.", e)
             hover_target = eef_pos 
@@ -571,12 +569,14 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             pos_error *= gain * 0.05 # Scale down for stability
             
             if action_dim < 16:
+                # variable_kp controller (BASELINE, LIE_ONLY, DIAG): action space is in
+                # PHYSICAL units [1, 300]. Must send physical kp values, NOT normalized
+                # RL-space values, or the arm will be completely limp and can't move.
                 pos_idx = 6
-                scripted_action[0:pos_idx] = np.array([-0.89, -0.89, -0.52,  -0.8, -0.5, -0.5]) 
-                # 
+                scripted_action[0:pos_idx] = np.array([17.3205, 17.3205, 72.0843,   30.899, 75.75, 75.75]) 
             else:
-                # pos_idx = 9
-                # scripted_action[0:pos_idx] = np.array([0.0, -0.0, 0.5, 0, 0, 0, -0.8, -0.5, -0.5]) 
+                # riemannian_kp controller (SPD_ONLY, FULL_GRL): action space is in
+                # physical SPD matrix format. Values below are a ~kp=300 diagonal matrix.
                 pos_idx = 12
                 scripted_action[0:pos_idx] = np.array([17.3205, 0.0, 0.0, 0.0, 17.3205, 0.0, 0.0, 0.0, 72.0843, 30.899, 75.75, 75.75]) 
             
@@ -587,6 +587,8 @@ class RobosuiteTeleportWrapper(gym.Wrapper):
             if dummy_t > self.setup_steps // 2:
                 scripted_action[pos_idx+3:pos_idx+6] = np.array([0.0, 0.005, 0.0]) 
 
+            # self.env is GymWrapper — steps go directly to the underlying controller,
+            # bypassing GeometricWrapper.step() entirely. No passthrough flag needed.
             obs, _, _, _, info = self.env.step(scripted_action)
 
             if dummy_t == 2:

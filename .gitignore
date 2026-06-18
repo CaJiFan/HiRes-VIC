@@ -88,3 +88,8 @@ assets/downloaded/
 *.mjb
 
 third_party/*
+
+# ==========================
+# Thesis Manuscript (private)
+# ==========================
+manuscript/

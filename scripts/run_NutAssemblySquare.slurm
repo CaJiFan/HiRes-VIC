@@ -1,165 +1,170 @@
 #!/bin/bash
 #
 # --- Slurm Configuration ---
-#SBATCH --job-name=Nut_Square
-#SBATCH --output=logs/nut_square_%j.txt
-#SBATCH --error=logs/nut_square_%j.err
+#SBATCH --job-name=NutSquare_HiResVIC
+#SBATCH --output=logs/nutsquare_%j.txt
+#SBATCH --error=logs/nutsquare_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=100                    
-#SBATCH --mem=160G                            
+#SBATCH --cpus-per-task=48
+#SBATCH --mem=160G
 #SBATCH --time=168:00:00
-#SBATCH --gres=gpu:lovelace:1                 
+#SBATCH --gres=gpu:lovelace:1
 
-# ==========================================
-# 1. ENVIRONMENT ACTIVATION
-# ==========================================
+set -e
+
 eval "$(conda shell.bash hook)"
 conda activate tfm
 
-# ==========================================
-# 2. OLLAMA SERVER SETUP
-# ==========================================
-# Tell Ollama to save massive weights to your generous /home drive
-export OLLAMA_MODELS="/home/cjimenez/ollama_models"
+mkdir -p logs/nut_square
 
-# Generate a unique port to avoid conflicts with other jobs on the same node
-UNIQUE_PORT=$((11000 + (SLURM_JOB_ID % 1000)))
-export OLLAMA_HOST="127.0.0.1:${UNIQUE_PORT}"
-
-echo "Starting Ollama server on port ${UNIQUE_PORT}..."
-~/.local/bin/ollama serve &
-
-# Wait for the server to fully initialize
-sleep 10
-
-# ==========================================
-# 3. SMOKE TEST
-# ==========================================
-echo "=================================================="
-echo "SMOKE TEST: Verifying Ollama is responding..."
-echo "=================================================="
-
-RESPONSE=$(curl -s -X POST http://${OLLAMA_HOST}/api/generate -d '{
-  "model": "llama3.2:latest",
-  "prompt": "Say hello!",
-  "stream": false
-}')
-
-# Check if the JSON contains "done":true, which proves the API works perfectly
-if echo "$RESPONSE" | grep -q '"done":true'; then
-    echo "✅ LLM Smoke Test PASSED! The model is loaded and generating text."
-    echo "Model Output:"
-    echo "$RESPONSE" | grep -o '"response":"[^"]*"'
-else
-    echo "❌ LLM Smoke Test FAILED! Ollama is not responding correctly."
-    echo "Raw Output: $RESPONSE"
-    echo "Aborting job to save compute hours."
-    exit 1
-fi
-echo "=================================================="
-
-
-
-
-# --- Admin Required L40S Fixes ---
 export NCCL_P2P_DISABLE=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:1024
 export MALLOC_ARENA_MAX=1
 
-# ==========================================
-# 4. RL TRAINING FUNCTION
-# ==========================================
-run_train() {
-    ENV_NAME=$1
-    USE_SPD=$2
-    USE_LG=$3
-    USE_LLM_PRIOR=$4
-    STEPS=$5
-    EXP_NAME=$6
-    SEED=$7
-    PRIOR_WEIGHT=$8
+TASK="NutAssemblySquare"
+STEPS=1000000
+HORIZON=60
+N_ENVS=8
+# GAMMA=0.95
+GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+SEEDS=(1 2 3)
+HORIZON=150
 
-    echo "=================================================="
-    echo "Starting SAC on $ENV_NAME for $STEPS steps..."
-    echo "Date: $(date)"
-    echo "=================================================="
-
-    ARGS=(
-        python3 src/train_fixed.py
-        --env "$ENV_NAME"
-        --run_name "$EXP_NAME"
-        --total_timesteps "$STEPS"
-        --seed "$SEED"
-        --gamma "$GAMMA"
-        --record_video
-    )
-    if [ "$USE_LLM_PRIOR" == "TRUE" ]; then
-        ARGS+=(--use_llm_prior)
-        ARGS+=(--llm_backend ollama)
-        ARGS+=(--llm_prior_weight "$PRIOR_WEIGHT")
-    fi
-    if [ "$USE_SPD" == "TRUE" ]; then
-        ARGS+=(--use_spd)
-    fi
-    if [ "$USE_SPD" == "FIXED" ]; then
-        ARGS+=(--use_fixed)
-    fi
-    if [ "$USE_LG" == "TRUE" ]; then
-        ARGS+=(--use_lie)
-    fi
-
-    mkdir -p logs
-    
-    "${ARGS[@]}" > "logs/${ENV_NAME}_SAC_${EXP_NAME}_SEED_${SEED}.log" 2>&1 &
-    echo "Launched: ${ENV_NAME} | ${EXP_NAME} | SEED=${SEED}"
-}
+LLM_W_INIT=0.7
+LLM_W_FLOOR=0.4
+LLM_ANNEAL=$((STEPS * 75 / 100 / N_ENVS))
+LLM_BACKEND="ollama"
+LLM_MODEL="llama3.2"
+LLM_QUERY_INTERVAL=20
 
 wait_for_queue() {
-    while [ $(jobs -p | wc -l) -gt 12 ]; do
+    while [ $(jobs -pr | wc -l) -ge 9 ]; do
         sleep 10
     done
 }
 
-# ==========================================
-# 5. EXPERIMENT EXECUTION
-# ==========================================
-TASK="NutAssemblySquare"
-# GAMMA=0.90
-STEPS=10_000_000
+export OLLAMA_MODELS="/home/cjimenez/ollama_models"
+UNIQUE_PORT=$((11000 + (SLURM_JOB_ID % 1000)))
+export OLLAMA_HOST="127.0.0.1:${UNIQUE_PORT}"
 
-for SEED in 3 2 1; do
-    for GAMMA in 0.99 0.90; do
-        for LLM_WEIGHT in 0.25 0.50 0.75; do
-            wait_for_queue
-            run_train $TASK "TRUE" "TRUE" "TRUE" $STEPS "FULL_GRL_RES_10M_LLM${LLM_WEIGHT}_G${GAMMA}" $SEED $LLM_WEIGHT
+echo "Starting Ollama server on port ${UNIQUE_PORT}..."
+~/.local/bin/ollama serve &
+sleep 10
 
-            # wait_for_queue
-            # run_train $TASK "TRUE" "FALSE" "TRUE" $STEPS "SPD_ONLY_LLM${LLM_WEIGHT}_G${GAMMA}" $SEED $LLM_WEIGHT
+check_ollama() {
+    OLLAMA_RESPONSE=$(curl -s -X POST "http://${OLLAMA_HOST}/api/generate" -d '{
+        "model": "llama3.2:latest",
+        "prompt": "Reply with one word: ready",
+        "stream": false
+    }' 2>/dev/null)
+    echo "$OLLAMA_RESPONSE" | grep -q '"done":true'
+}
 
-            # wait_for_queue
-            # run_train $TASK "FALSE" "TRUE" "TRUE" $STEPS "LIE_ONLY_KP1_300_G${GAMMA}" $SEED $LLM_WEIGHT
+run_geo() {
+    local USE_SPD=$1
+    local USE_LIE=$2
+    local USE_DIAG=$3
+    local EXP_NAME=$4
+    local SEED=$5
 
-            wait_for_queue
-            run_train $TASK "FALSE" "FALSE" "TRUE" $STEPS "BASELINE_RES_10M_LLM${LLM_WEIGHT}_G${GAMMA}" $SEED $LLM_WEIGHT
+    ARGS=(
+        python3 src/train_fixed.py
+        --env "$TASK"
+        --run_name "$EXP_NAME"
+        --total_timesteps "$STEPS"
+        --horizon "$HORIZON"
+        --n_envs "$N_ENVS"
+        --gamma "$GAMMA"
+        --seed "$SEED"
+        --record_video
+        --camera_names "frontview,robot0_eye_in_hand"
+        --primitive_init teleport
+    )
+    [ "$USE_SPD"  == "TRUE" ] && ARGS+=(--use_spd)
+    [ "$USE_LIE"  == "TRUE" ] && ARGS+=(--use_lie)
+    [ "$USE_DIAG" == "TRUE" ] && ARGS+=(--use_diag)
 
-        done
+    LOG="logs/nut_square/${TASK}_${EXP_NAME}_SEED_${SEED}.log"
+    "${ARGS[@]}" > "$LOG" 2>&1
+    echo "  ✅ Done: ${EXP_NAME} SEED=${SEED}"
+}
 
-        # wait_for_queue
-        # run_train $TASK "TRUE" "TRUE" "FALSE" $STEPS "FULL_GRL_10M_G${GAMMA}" $SEED 0
+run_llm() {
+    local USE_SPD=$1
+    local USE_LIE=$2
+    local EXP_NAME=$3
+    local SEED=$4
 
-        # wait_for_queue
-        # run_train $TASK "TRUE" "FALSE" "FALSE" $STEPS "SPD_ONLY_G${GAMMA}" $SEED 0
+    ARGS=(
+        python3 src/train_fixed.py
+        --env "$TASK"
+        --run_name "$EXP_NAME"
+        --total_timesteps "$STEPS"
+        --horizon "$HORIZON"
+        --n_envs "$N_ENVS"
+        --gamma "$GAMMA"
+        --seed "$SEED"
+        --record_video
+        --camera_names "frontview,robot0_eye_in_hand"
+        --primitive_init teleport
+        --use_llm_prior
+        --llm_backend "$LLM_BACKEND"
+        --llm_model "$LLM_MODEL"
+        --llm_prior_weight "$LLM_W_INIT"
+        --llm_anneal_steps "$LLM_ANNEAL"
+        --llm_anneal_floor "$LLM_W_FLOOR"
+        --llm_query_interval "$LLM_QUERY_INTERVAL"
+    )
+    [ "$USE_SPD" == "TRUE" ] && ARGS+=(--use_spd)
+    [ "$USE_LIE" == "TRUE" ] && ARGS+=(--use_lie)
 
-        # wait_for_queue
-        # run_train $TASK "FALSE" "TRUE" "FALSE" $STEPS "LIE_ONLY_KP1_300_G${GAMMA}" $SEED 0
+    LOG="logs/nut_square/${TASK}_${EXP_NAME}_SEED_${SEED}.log"
+    "${ARGS[@]}" > "$LOG" 2>&1
+    echo "  ✅ Done: ${EXP_NAME} SEED=${SEED}"
+}
 
-        # wait_for_queue
-        # run_train $TASK "FALSE" "FALSE" "FALSE" $STEPS "BASELINE_10M_KP1_300_G${GAMMA}" $SEED 0
-    done
+echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
+if ! check_ollama; then
+    echo "❌ Ollama not responding. Aborting."
+    exit 1
+fi
+echo "✅ Ollama OK — proceeding."
+
+for SEED in "${SEEDS[@]}"; do
+    echo "════════════════  SEED ${SEED}  ════════════════"
+
+    wait_for_queue
+    run_geo "FALSE" "FALSE" "FALSE" "BASELINE_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_geo "FALSE" "FALSE" "TRUE"  "DIAG_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_geo "TRUE"  "TRUE"  "FALSE" "FULLGRL_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_llm "FALSE"  "FALSE" "BASELINE_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_llm "TRUE"  "FALSE" "SPD_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_llm "FALSE" "TRUE"  "LIE_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+
+    wait_for_queue
+    run_llm "TRUE"  "TRUE"  "FULL_GRL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    
+    # Wait for all 9 jobs of the current seed to finish before moving to the next seed
+    # wait
 done
 
-echo "All NutAssemblySquare experiments queued. Waiting for jobs to finish..."
-wait
-echo "✅ NutAssemblySquare experiments completed (jobs finished)."
+echo "��  All NutAssemblySquare experiments complete!"
+conda deactivate

@@ -1,0 +1,12 @@
+/var/spool/slurmd/job02236/slurm_script: line 46: 1_000_000: value too great for base (error token is "1_000_000")
+
+██████████████  SECTION A: Geometric Prior  ██████████████
+
+════════════════  SEED 1  ════════════════
+────────────────────────────────────────────────────────
+▶ GEO  DOOR_BASELINE_G0.99 | SEED=1
+  SPD=FALSE LIE=FALSE DIAG=FALSE
+  steps=1_000_000 horizon=300 n_envs=8 γ=0.99
+────────────────────────────────────────────────────────
+  → logs/door/Door_DOOR_BASELINE_G0.99_SEED_1.log
+[2026-06-18T01:01:59.984] error: *** JOB 2236 ON drslurm CANCELLED AT 2026-06-18T01:01:59 DUE to SIGNAL Terminated ***

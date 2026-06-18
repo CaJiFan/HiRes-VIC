@@ -1,0 +1,80 @@
+task: Door (Robosuite)
+robot: Panda
+description: >
+  The robot must open a door by grasping a handle and pulling/rotating the door
+  open. The door swings on a vertical hinge. The episode starts with the robot's
+  EEF near the door panel. Success requires rotating the handle latch and then
+  pulling the door to a threshold angle (~45 deg). The primary challenge is the
+  combined rotational-translational coordination: the gripper must conform to
+  the handle geometry (high rotational compliance for the latch turn), then
+  apply a sustained lateral pulling force while following the door's arc.
+
+phases:
+  approach:
+    # EEF is moving toward the handle in free space.
+    # Low overall stiffness to safely establish contact without bouncing off.
+    # Slightly stiffer in Z to maintain height during approach.
+    kp_trans: [40.0, 40.0, 55.0]
+    kp_rot:   [20.0, 20.0, 20.0]
+    description: >
+      Free-space approach to the door handle. Moderate isotropic compliance
+      prevents harsh contact on first touch. Z-axis slightly stiffer to
+      maintain approach height.
+
+  grasp_turn:
+    # Gripper is on or near the handle; must close and turn the latch.
+    # High rotational compliance in Rx (door-axis aligned) so the wrist
+    # can follow the latch rotation without fighting it.
+    # Moderate translational stiffness to hold position against the door.
+    kp_trans: [80.0, 60.0, 50.0]
+    kp_rot:   [15.0, 15.0, 35.0]
+    description: >
+      Grasping and turning the latch. High compliance around the latch
+      rotation axis (Rz/Rx depending on handle orientation) lets the
+      gripper follow the handle rotation naturally. Moderate translational
+      stiffness holds the EEF against the handle without excessive push.
+
+  pull_open:
+    # Handle is turned; robot must pull door open along its arc.
+    # The pulling direction is roughly X (lateral away from door plane).
+    # High X stiffness for force authority; compliant in Y (along door arc)
+    # so the EEF can naturally follow the door sweep without fighting kinematics.
+    kp_trans: [150.0, 30.0, 60.0]
+    kp_rot:   [25.0, 20.0, 15.0]
+    description: >
+      Pulling the door open. High stiffness in the primary pull direction
+      (X, away from the door panel) provides the sustained lateral force
+      needed to overcome the hinge friction. Low Y stiffness lets the EEF
+      follow the door's arc compliantly, avoiding jamming or binding.
+
+  swing_through:
+    # Door is partially open (>30 deg); continue opening toward target angle.
+    # Reduce pull force stiffness slightly to avoid overshooting; maintain
+    # compliance in Y to track the arc. Moderate Z stiffness for stability.
+    kp_trans: [90.0, 25.0, 60.0]
+    kp_rot:   [20.0, 15.0, 15.0]
+    description: >
+      Door is already partially open; continue swinging to target angle.
+      Reduced pulling stiffness prevents overshoot. Compliant Y continues
+      to allow arc-following without resistance.
+
+planner_prompt: |
+  You are an impedance control expert for a robot opening a door in Robosuite.
+
+  The Panda arm must grasp a door handle, turn the latch, and pull the door
+  open. Translational stiffness is a diagonal 3x3 SPD matrix controlling
+  EEF compliance; rotational stiffness controls orientation compliance.
+
+  Available impedance phases:
+    approach    – EEF is moving toward the handle in free space. No contact yet.
+                  Use when the EEF is not in contact with the door/handle.
+    grasp_turn  – EEF is at the handle; must close gripper and turn the latch.
+                  Use when EEF is near the handle and needs to grasp/rotate it.
+    pull_open   – Latch is turned; robot is pulling door open (door angle < 30 deg).
+                  Use high pulling stiffness to swing door open from rest.
+    swing_through – Door is already open (angle > 30 deg); continue to target angle.
+                  Use when door is partially open and needs continued arc-following.
+
+  You will receive: EEF position, contact flags, door position, handle position.
+  Respond with ONLY the exact phase name: approach | grasp_turn | pull_open | swing_through.
+  No explanation, no punctuation — just the phase name.

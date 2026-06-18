@@ -1,0 +1,24 @@
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly, otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+/home/cjimenez/.conda/envs/tfm/lib/python3.12/site-packages/sapien/_vulkan_tricks.py:78: UserWarning: Failed to find Vulkan ICD file. This is probably due to an incorrect or partial installation of the NVIDIA driver. SAPIEN will attempt to provide an ICD file anyway but it may not work.
+  warn(
+[robosuite INFO] Loading controller configuration from: /home/cjimenez/.conda/envs/tfm/lib/python3.12/site-packages/robosuite/controllers/config/robots/default_panda.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/cjimenez/.conda/envs/tfm/lib/python3.12/site-packages/robosuite/controllers/config/robots/default_panda.json (composite_controller_factory.py:121)
+/home/cjimenez/.conda/envs/tfm/lib/python3.12/site-packages/gymnasium/spaces/box.py:236: UserWarning: [33mWARN: Box low's precision lowered by casting to float32, current low.dtype=float64[0m
+  gym.logger.warn(
+/home/cjimenez/.conda/envs/tfm/lib/python3.12/site-packages/gymnasium/spaces/box.py:306: UserWarning: [33mWARN: Box high's precision lowered by casting to float32, current high.dtype=float64[0m
+  gym.logger.warn(
+[robosuite INFO] Loading controller configuration from: /home/cjimenez/.conda/envs/tfm/lib/python3.12/site-packages/robosuite/controllers/config/robots/default_panda.json (composite_controller_factory.py:121)
+
+
+            🔧 Robosuite Wrapper Initialized
+            | SPD: False
+            | Lie Group: False
+            | Diag Manifold: False
+            | Fixed: False
+        
+▶️ Action space: task_type='door' → shape=(13,) (prior_dim=6)
+▶️ Base Observation space shape:  (64,)
+▶️ Expanded Residual Observation space shape:  (71,)
+GeometricWrapper obs space: Box(-inf, inf, (71,), float32)
+

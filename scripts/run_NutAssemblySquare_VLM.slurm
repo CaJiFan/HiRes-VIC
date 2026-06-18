@@ -136,7 +136,7 @@ run_train() {
 }
 
 wait_for_queue() {
-    while [ $(jobs -p | wc -l) -gt 12 ]; do
+    while [ $(jobs -pr | wc -l) -gt 12 ]; do
         sleep 10
     done
 }

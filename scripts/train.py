@@ -161,19 +161,11 @@ def main():
     run_name = f'{wandb_run_name}_SEED_{args.seed}'
 
     wandb.init(
-<<<<<<< HEAD
-        project="HiRes-VIC",
-        name=wandb_run_name,
-        sync_tensorboard=True,
-        monitor_gym=True,
-        save_code=True,
-=======
         project="HiRes-VIC",          
         name=wandb_run_name,                
         sync_tensorboard=True,        
         monitor_gym=True,             
         save_code=True,              
->>>>>>> 3047f2f14cac3b6e64c2b6034d43fedec7ac3ad7
         config={
             "algorithm": args.algorithm,
             "env": args.env,

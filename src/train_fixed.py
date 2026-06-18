@@ -72,7 +72,7 @@ DEFAULT_WIPE_TASK_CONFIG = {
 }
 
 
-TELEPORT_STEPS = 150
+TELEPORT_STEPS = 90
 
 def load_wipe_task_config():
     cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'configs', 'wipe_task_config.yaml'))
@@ -143,6 +143,62 @@ def nutassembly_task_metrics_fn(env, info):
         
     return metrics
 
+
+def door_task_metrics_fn(env, info):
+    """Metrics for the Robosuite Door environment.
+
+    Reports:
+      physics/door_success      — 1.0 if the door has been fully opened (env._check_success())
+      physics/door_angle_deg    — current door hinge angle in degrees (0 = closed)
+      physics/handle_grasped    — 1.0 if the robot is grasping the door handle
+      physics/is_success        — mirror of door_success for EvalCallback compatibility
+    """
+    metrics = {}
+    try:
+        raw_env = getattr(env, 'unwrapped', env)
+        inner = getattr(raw_env, 'unwrapped', getattr(raw_env, 'env', raw_env))
+
+        # ── Task success ─────────────────────────────────────────────────────
+        if hasattr(inner, '_check_success'):
+            is_success = bool(inner._check_success())
+            metrics['physics/door_success'] = 1.0 if is_success else 0.0
+            metrics['physics/is_success'] = 1.0 if is_success else 0.0
+
+        # Also surface is_success from GeometricWrapper if already set
+        if 'is_success' in info:
+            metrics['physics/is_success'] = float(info['is_success'])
+
+        # ── Door hinge angle ─────────────────────────────────────────────────
+        # Robosuite Door env exposes the door hinge joint via the sim
+        try:
+            sim = inner.sim
+            # The door hinge joint is named 'door_hinge' in Robosuite
+            hinge_id = sim.model.joint_name2id('door_hinge')
+            hinge_angle = float(sim.data.qpos[sim.model.jnt_qposadr[hinge_id]])
+            metrics['physics/door_angle_deg'] = float(np.degrees(hinge_angle))
+        except Exception:
+            pass
+
+        # ── Handle grasp ─────────────────────────────────────────────────────
+        try:
+            # Robosuite Door exposes this as a sim contact check
+            if hasattr(inner, 'door_handle_touch'):
+                metrics['physics/handle_grasped'] = float(inner.door_handle_touch)
+            elif hasattr(inner, '_check_grasp'):
+                # Generic Robosuite grasp check against the handle geom
+                grasped = inner._check_grasp(
+                    gripper=inner.robots[0].gripper,
+                    object_geoms=inner.door.door_handle
+                )
+                metrics['physics/handle_grasped'] = 1.0 if grasped else 0.0
+        except Exception:
+            pass
+
+    except Exception as e:
+        pass
+
+    return metrics
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Train SAC on robosuite TiltedWipe with different controllers and numbers of markers. Logs to WandB and Tensorboard.")
     
@@ -166,6 +222,12 @@ def parse_args():
     parser.add_argument("--llm_backend", type=str, default="ollama", choices=["openai", "ollama"])
     parser.add_argument("--llm_query_interval", type=int, default=50)
     parser.add_argument("--llm_prior_weight", type=float, default=0.4)
+    parser.add_argument("--llm_anneal_steps", type=int, default=0,
+                   help="Linearly decay LLM prior weight to anneal_floor over this many per-env planner steps. "
+                        "0 = no annealing (constant weight). Recommended: 0.75 * total_timesteps / n_envs.")
+    parser.add_argument("--llm_anneal_floor", type=float, default=0.05,
+                   help="Minimum prior weight after annealing (default 0.05). "
+                        "Set to 0.0 to anneal completely to zero.")
     parser.add_argument("--llm_model",          default="llama3.2")
     parser.add_argument("--llm_profile",        default="configs/nutassembly_robosuite_impedance_profile.yaml",
                    help="Path to YAML impedance profile for this task")
@@ -186,7 +248,8 @@ def parse_args():
 
     parser.add_argument("--record_video", action="store_true",
                         help="Record one eval episode as wandb video at each eval checkpoint")
-    parser.add_argument("--video_fps", type=int, default=30)
+    parser.add_argument("--video_fps", type=int, default=20,
+                        help="FPS for recorded WandB videos. Should match control_freq (default: 20 Hz)")
     parser.add_argument("--primitive_init", type=str, default="teleport",
                         choices=["none", "teleport", "scripted", "both"],
                         help="Initialize episodes with a motion primitive: 'teleport', 'scripted', 'both', or 'none'.")
@@ -231,22 +294,33 @@ def make_video_env(args):
     elif 'nutassembly' in env_lower:
         task_type = 'nutassembly'
         task_metrics = nutassembly_task_metrics_fn
+    elif 'door' in env_lower:
+        task_type = 'door'
+        task_metrics = door_task_metrics_fn
 
     task_kwargs = {}
     if task_config is not None:
         task_kwargs['task_config'] = task_config
 
-    enable_cameras = True    
+    enable_cameras = True
+    # Honour --camera_names so passing e.g. frontview,robot0_eye_in_hand gives side-by-side video
+    video_camera_names = (
+        [c.strip() for c in args.camera_names.split(',')]
+        if getattr(args, 'camera_names', None)
+        else ['frontview']
+    )
     env = suite.make(
         env_name=args.env,
         robots="Panda",
         controller_configs=controller_config,
         has_renderer=False,
         use_object_obs=True,
-        has_offscreen_renderer=enable_cameras,  # Enable rendering if cameras needed
-        use_camera_obs=enable_cameras,           # Enable camera observations if requested
-        camera_names=['frontview'], 
+        has_offscreen_renderer=enable_cameras,
+        use_camera_obs=enable_cameras,
+        camera_names=video_camera_names,
+        control_freq=20,
         reward_shaping=True,
+        ignore_done=False,
         horizon=args.horizon,
         **task_kwargs
     )
@@ -260,13 +334,23 @@ def make_video_env(args):
         print('Exception setting up primitive', e)
         pass
     
-    # ✅ Determine profile path: use VLM profile if use_vlm is true
+    # ✅ Auto-select profile: VLM overrides, then env-specific defaults
     llm_profile_path = args.llm_profile
-    if args.use_llm_prior and args.use_vlm:
-        llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
+    if args.use_llm_prior:
+        if args.use_vlm:
+            llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
+        elif 'door' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
+            # Auto-select Door profile when user hasn't explicitly overridden --llm_profile
+            llm_profile_path = "configs/door_impedance_profile.yaml"
+        elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
+            # Auto-select Wipe profile when user hasn't explicitly overridden --llm_profile
+            llm_profile_path = "configs/wipe_impedance_profile.yaml"
     
+    stiffness_penalty = 0.002 if task_type == 'wipe' else 0.05
+
     env = GeometricWrapper(
         env=env,
+        stiffness_penalty=stiffness_penalty,
         use_spd_manifold=args.use_spd,
         use_lie_group=args.use_lie,
         use_diag_manifold=args.use_diag,
@@ -278,9 +362,10 @@ def make_video_env(args):
         llm_query_interval=args.llm_query_interval,
         llm_prior_weight=args.llm_prior_weight,
         llm_profile_path=llm_profile_path if args.use_llm_prior else None,
+        llm_anneal_steps=getattr(args, 'llm_anneal_steps', 0),
         task_type=task_type,
         task_metrics_fn=task_metrics,
-        use_vision=args.use_vlm,  # ✅ NEW: pass vision flag
+        use_vision=args.use_vlm,
     )
 
     
@@ -320,6 +405,9 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         elif 'nutassembly' in env_lower:
             task_type = 'nutassembly'
             task_metrics = nutassembly_task_metrics_fn
+        elif 'door' in env_lower:
+            task_type = 'door'
+            task_metrics = door_task_metrics_fn
 
         task_kwargs = {}
         if task_config is not None:
@@ -340,6 +428,8 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             use_camera_obs=enable_cameras,           # Enable camera observations if requested
             camera_names=camera_names_list if enable_cameras else None,
             reward_shaping=True,
+            control_freq=20,
+            ignore_done=False,
             horizon=args.horizon,
             **task_kwargs
         )
@@ -357,13 +447,19 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             print(f"Error occurred while initializing primitive wrapper: {e}")
             pass
         
-        # ✅ Determine profile path: use VLM profile if use_vlm is true
+        # ✅ Auto-select profile: VLM overrides, then env-specific defaults
         llm_profile_path = args.llm_profile
-        if args.use_llm_prior and args.use_vlm:
-            llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
+        if args.use_llm_prior:
+            if args.use_vlm:
+                llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
+            elif 'door' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
+                llm_profile_path = "configs/door_impedance_profile.yaml"
         
+        stiffness_penalty = 0.002 if task_type == 'wipe' else 0.05
+
         env = GeometricWrapper(
             env=env,
+            stiffness_penalty=stiffness_penalty,
             use_spd_manifold=args.use_spd,
             use_lie_group=args.use_lie,
             use_diag_manifold=args.use_diag,
@@ -375,9 +471,11 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             llm_query_interval=args.llm_query_interval,
             llm_prior_weight=args.llm_prior_weight,
             llm_profile_path=llm_profile_path if args.use_llm_prior else None,
+            llm_anneal_steps=getattr(args, 'llm_anneal_steps', 0),
+            llm_anneal_floor=getattr(args, 'llm_anneal_floor', 0.05),
             task_type=task_type,
             task_metrics_fn=task_metrics,
-            use_vision=args.use_vlm,  # ✅ NEW: pass vision flag
+            use_vision=args.use_vlm,
         )
 
         # env.reset(seed=seed + rank)
@@ -390,18 +488,41 @@ def make_env(args, is_eval=False, rank=0, seed=0):
     
     return _init
 
+class SyncEvalCallback(EvalCallback):
+    def _on_step(self) -> bool:
+        try:
+            # Get the first (and only) eval environment from the VecMonitor -> DummyVecEnv
+            inner_env = self.eval_env.venv.envs[0]
+            
+            # Unwrap until we find the GeometricWrapper with the llm_planner
+            while hasattr(inner_env, "env") and not hasattr(inner_env, "llm_planner"):
+                inner_env = inner_env.env
+            
+            if hasattr(inner_env, "llm_planner") and inner_env.llm_planner is not None:
+                # Sync eval LLM planner's step counter with the training progress
+                train_n_envs = self.model.get_env().num_envs
+                local_steps = self.num_timesteps // train_n_envs
+                inner_env.llm_planner._global_step = local_steps
+        except Exception as e:
+            print(f"Warning: Failed to sync eval LLM step: {e}")
+            
+        return super()._on_step()
+
 def setup_evaluation_callback(args, run_name):
     # Evaluation 
     eval_env_fn = make_env(args, is_eval=True, rank=0, seed=42)
     eval_env = DummyVecEnv([eval_env_fn])
     eval_env = VecMonitor(eval_env)
     
-    eval_callback = EvalCallback(
+    # Evaluate every ~10% of total training budget, but at least every 50k env steps
+    eval_freq_steps = max(args.total_timesteps // (args.n_envs * 10), 50_000 // args.n_envs)
+    
+    eval_callback = SyncEvalCallback(
         eval_env,
         best_model_save_path=f"./logs/best_models/{run_name}/",
         log_path=f"./logs/eval/{run_name}/",
-        eval_freq=max(480_000 // args.n_envs, 1),
-        n_eval_episodes=10, # Run 10 deterministic episodes
+        eval_freq=eval_freq_steps,
+        n_eval_episodes=10,  # 10 deterministic episodes per eval
         deterministic=True,
         render=False
     )
