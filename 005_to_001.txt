@@ -1,0 +1,14 @@
+2026-06-15T21:01:04Z PLANNER_RESPONSE Seeing negative rewards early in training is actually completely normal (and often desired!) when introducing a safety penalty like Riemannian jerk.  
+2026-06-17T00:50:14Z CODE_ACTION Created At: 2026-06-17T00:50:14Z Completed At: 2026-06-17T00:50:25Z The following changes were made by the replace_file_content tool to: /home/cjimene
+2026-06-17T00:53:35Z CODE_ACTION Created At: 2026-06-17T00:53:35Z Completed At: 2026-06-17T00:53:37Z The following changes were made by the replace_file_content tool to: /home/cjimene
+2026-06-18T10:13:53Z USER_INPUT <USER_REQUEST> can u do the same formatting fix for this one?  " % LaTeX Table for Safety & Smoothness across all environments \begin{table}[h] \cente
+2026-06-18T10:14:33Z PLANNER_RESPONSE Done! The `generate_tables.py` script has been updated to use the extremely clean, side-by-side wide format for the Safety table, while pulling Tilted
+2026-06-18T10:16:05Z PLANNER_RESPONSE You got it! I have modified `scripts/generate_tables.py` to compile all 18 metrics (6 per environment $\times$ 3 environments) plus the configuration 
+2026-06-18T10:18:43Z PLANNER_RESPONSE Ah, I totally misunderstood—my apologies! You wanted the vertically "stacked" format with the `\multicolumn{7}{c}{\textit{Environment}}` header acting
+2026-06-19T21:37:00Z CODE_ACTION Created At: 2026-06-19T21:37:00Z Completed At: 2026-06-19T21:37:02Z The following changes were made by the replace_file_content tool to: /home/cjimene
+2026-06-20T11:27:18Z CODE_ACTION Created At: 2026-06-20T11:27:18Z Completed At: 2026-06-20T11:27:20Z The following changes were made by the multi_replace_file_content tool to: /home/c
+2026-06-20T11:27:21Z PLANNER_RESPONSE **You are exactly right!** Those graphs tell a very clear, textbook story of a phenomenon in Reinforcement Learning called **"Policy Collapse" due to 
+2026-06-20T12:43:27Z PLANNER_RESPONSE Here are the results and my analysis from scanning the final summary logs for the Gamma Search:  ### 🧹 TiltedWipe: The Clear Winner is `Gamma = 0.95` 
+2026-06-20T13:03:51Z PLANNER_RESPONSE Ah, I understand! You are talking about the core Robosuite / Reward Hyperparameters.  No, you do not need to make any extra changes. Everything is alr
+2026-06-20T20:27:13Z USER_INPUT <USER_REQUEST> do you have a record on at wha time exactly i accepted the change on trained_fixed to change from 0.05 to 0.01 the stiffness_penalty? <
+2026-06-20T20:35:51Z PLANNER_RESPONSE Yes! According to the conversation records, you accepted the change to the `stiffness_penalty` in `train_fixed.py` (from `0.05` to `0.01`) on **June 1

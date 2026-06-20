@@ -113,6 +113,8 @@ class GeometricWrapper(gym.Wrapper):
         # Peg tip Z position cached each episode in reset() for the P-controller.
         # (peg position is not in the observation dict, so we read it from the sim once.)
         self._peg_top_z = None
+        self._consecutive_stuck_steps = 0
+        self._last_nut_z = None
 
         print(f"""
             🔧 Robosuite Wrapper Initialized
@@ -134,19 +136,15 @@ class GeometricWrapper(gym.Wrapper):
         self.prior_dim = 9 if self.use_spd_manifold else 6
 
         # action_dim: what the RL policy actually outputs.
-        #   - NutAssembly — kinematics are scripted (P-controller descent + forced gripper),
-        #     so the agent only needs to learn stiffness. action_dim = prior_dim.
-        #   - All other tasks (Door, Wipe, …) — agent learns stiffness AND kinematics
-        #     jointly. action_dim = full underlying controller action space, i.e. whatever
-        #     the Robosuite OSC_POSE controller expects (variable_kp: 13-dim,
-        #   riemannian_kp: 19-dim).
         if self.task_type == 'nutassembly':
-            action_dim = self.prior_dim
+            # We want to learn stiffness (prior_dim) + [dx, dy, dz, d_roll, d_pitch, d_yaw] wiggle.
+            # (Note: dz will be overwritten by P-controller, but agent outputs the full 6D kin array).
+            # Gripper is forced closed.
+            action_dim = self.prior_dim + 6
         
-
-        # gripper_dim = self.env.env.action_dim - (18 if self.use_spd_manifold else 6 if self.use_fixed else 12)
-        gripper_dim = 0 if 'wipe' in self.task_type else 1
-        if gripper_dim > 0:
+        # We only add a separate gripper dimension if it's not wipe and not nutassembly
+        gripper_dim = 0 if ('wipe' in self.task_type or 'nutassembly' in self.task_type) else 1
+        if gripper_dim > 0 and self.task_type != 'nutassembly':
             action_dim += gripper_dim
 
 
@@ -387,6 +385,16 @@ class GeometricWrapper(gym.Wrapper):
             if self.task_type == 'nutassembly':
                 # ── NutAssembly-specific overrides ─────────────────────────────
                 # We now learn kp_rot, so no hardcoded override is needed.
+                kin_raw = action[-6:]
+                max_trans_wiggle = 0.002 # 2 mm per step
+                max_rot_wiggle = 0.05    # ~2.8 degrees per step
+                
+                dx = float(kin_raw[0] * max_trans_wiggle)
+                dy = float(kin_raw[1] * max_trans_wiggle)
+                
+                d_roll  = float(kin_raw[3] * max_rot_wiggle)
+                d_pitch = float(kin_raw[4] * max_rot_wiggle)
+                d_yaw   = float(kin_raw[5] * max_rot_wiggle)
 
                 # P-controller: push nut down onto peg proportional to how far
                 # above the peg tip the nut currently is.
@@ -406,7 +414,7 @@ class GeometricWrapper(gym.Wrapper):
                 except Exception:
                     dz = _FALLBACK_DZ
 
-                trajectory_command = np.array([0.0, 0.0, dz, 0.0, 0.0, 0.0], dtype=np.float32)
+                trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
                 gripper_command = np.array([1.0], dtype=np.float32)
 
                 robosuite_action = np.concatenate([
@@ -439,10 +447,20 @@ class GeometricWrapper(gym.Wrapper):
             kp_scaled = np.exp(log_kp)  # 6-dim physical kp (3 trans + 3 rot)
 
             if self.task_type == 'nutassembly':
-                # NutAssembly: use scripted P-controller descent (kp has only 3 trans dims)
-                # DIAG for NutAssembly is not typically run; safety fallback.
-                kp_rot_diag = np.array([40.0, 40.0, 40.0], dtype=np.float32)
+                kin_raw = action[-6:]
+                max_trans_wiggle = 0.002 # 2 mm per step
+                max_rot_wiggle = 0.05    # ~2.8 degrees per step
+                
+                dx = float(kin_raw[0] * max_trans_wiggle)
+                dy = float(kin_raw[1] * max_trans_wiggle)
+                
+                d_roll  = float(kin_raw[3] * max_rot_wiggle)
+                d_pitch = float(kin_raw[4] * max_rot_wiggle)
+                d_yaw   = float(kin_raw[5] * max_rot_wiggle)
+
+                # Scripted P-controller descent along -Z (insertion axis).
                 _P_GAIN = 1.5
+                _FALLBACK_DZ = -0.010
                 try:
                     nut_pos = self._last_obs_dict.get('SquareNut_pos',
                               self._last_obs_dict.get('RoundNut_pos', None))
@@ -451,15 +469,15 @@ class GeometricWrapper(gym.Wrapper):
                         dz = float(-_P_GAIN * max(dz_above, 0.0))
                         dz = np.clip(dz, -0.04, 0.0)
                     else:
-                        dz = -0.010
+                        dz = _FALLBACK_DZ
                 except Exception:
-                    dz = -0.010
-                trajectory_command = np.array([0.0, 0.0, dz, 0.0, 0.0, 0.0], dtype=np.float32)
+                    dz = _FALLBACK_DZ
+
+                trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
                 gripper_command = np.array([1.0], dtype=np.float32)
 
                 robosuite_action = np.concatenate([
-                    kp_scaled[:3],  # kp_trans only
-                    kp_rot_diag,
+                    kp_scaled,  # 6 dims (kp_trans + kp_rot, physical)
                     trajectory_command,
                     gripper_command,
                 ])
@@ -495,6 +513,17 @@ class GeometricWrapper(gym.Wrapper):
                 kp_trans_scaled = low[:3] + 0.5 * (prior_action[:3] + 1.0) * (high[:3] - low[:3])
                 kp_rot_scaled = low[3:6] + 0.5 * (prior_action[3:6] + 1.0) * (high[3:6] - low[3:6])
                 
+                kin_raw = action[-6:]
+                max_trans_wiggle = 0.002 # 2 mm per step
+                max_rot_wiggle = 0.05    # ~2.8 degrees per step
+                
+                dx = float(kin_raw[0] * max_trans_wiggle)
+                dy = float(kin_raw[1] * max_trans_wiggle)
+                
+                d_roll  = float(kin_raw[3] * max_rot_wiggle)
+                d_pitch = float(kin_raw[4] * max_rot_wiggle)
+                d_yaw   = float(kin_raw[5] * max_rot_wiggle)
+
                 # Scripted P-controller descent along -Z (insertion axis).
                 _P_GAIN = 1.5
                 _FALLBACK_DZ = -0.010
@@ -510,7 +539,7 @@ class GeometricWrapper(gym.Wrapper):
                 except Exception:
                     dz = _FALLBACK_DZ
 
-                trajectory_command = np.array([0.0, 0.0, dz, 0.0, 0.0, 0.0], dtype=np.float32)
+                trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
                 gripper_command = np.array([1.0], dtype=np.float32)
 
                 robosuite_action = np.concatenate([
@@ -558,10 +587,35 @@ class GeometricWrapper(gym.Wrapper):
        
         obs, reward, terminated, truncated, info = step_return
 
-        # Early termination on success for NutAssembly: Robosuite's horizon-based
-        # 'done' doesn't fire until horizon end, but we want to end the episode
-        # immediately upon assembly so the agent doesn't receive confusing post-success steps.
+        flat_obs = self._flatten_obs(obs)
+
+        # Anti-Jam Penalty Logic
         if self.task_type == 'nutassembly' and not terminated:
+            try:
+                nut_pos = self._last_obs_dict.get('SquareNut_pos',
+                          self._last_obs_dict.get('RoundNut_pos', None))
+                if nut_pos is not None:
+                    current_nut_z = float(nut_pos[2])
+                    if self._last_nut_z is not None:
+                        dz_actual = current_nut_z - self._last_nut_z
+                        # The agent is "stuck" if it didn't make downward progress (> 0.5mm)
+                        # We don't use abs() because moving UP shouldn't reset the stuck counter!
+                        if dz_actual > -0.0005:
+                            self._consecutive_stuck_steps += 1
+                        else:
+                            self._consecutive_stuck_steps = 0
+                        
+                        if self._consecutive_stuck_steps > 10:
+                            reward -= 0.5  # Heavy penalty for resting lazy on the peg
+                    
+                    self._last_nut_z = current_nut_z
+            except Exception as e:
+                pass
+
+        # Early termination on success: Robosuite's horizon-based
+        # 'done' doesn't fire until horizon end, but we want to end the episode
+        # immediately upon task completion so the agent doesn't receive confusing post-success steps.
+        if not terminated:
             if bool(self.gym_env._check_success()):
                 terminated = True
 
@@ -648,9 +702,10 @@ class GeometricWrapper(gym.Wrapper):
         self.ang_accel_history.append(ang_accel)
         self.prev_ang_vel = current_ang_vel.copy()
 
-        # Apply Riemannian Jerk Penalty to encourage smooth transitions on the SPD manifold
-        if self.use_spd_manifold:
-            reward = reward - (self.stiffness_penalty * riemannian_jerk)
+        # Apply the scale-invariant Riemannian Jerk Penalty universally
+        # (For BASELINE's diagonal matrices, this naturally reduces to the log-ratio penalty, 
+        # which perfectly matches the scale without blowing up like Euclidean jerk would).
+        reward = reward - (self.stiffness_penalty * riemannian_jerk)
 
         self.log_info(physical_kp_vals, step_return)
 

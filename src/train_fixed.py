@@ -72,7 +72,7 @@ DEFAULT_WIPE_TASK_CONFIG = {
 }
 
 
-TELEPORT_STEPS = 90
+TELEPORT_STEPS = 150
 
 def load_wipe_task_config():
     cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'configs', 'wipe_task_config.yaml'))
@@ -250,7 +250,7 @@ def parse_args():
                         help="Record one eval episode as wandb video at each eval checkpoint")
     parser.add_argument("--video_fps", type=int, default=20,
                         help="FPS for recorded WandB videos. Should match control_freq (default: 20 Hz)")
-    parser.add_argument("--primitive_init", type=str, default="teleport",
+    parser.add_argument("--primitive_init", type=str, default="none",
                         choices=["none", "teleport", "scripted", "both"],
                         help="Initialize episodes with a motion primitive: 'teleport', 'scripted', 'both', or 'none'.")
     parser.add_argument("--quat_debug", action="store_true",
@@ -321,7 +321,7 @@ def make_video_env(args):
         control_freq=20,
         reward_shaping=True,
         ignore_done=False,
-        horizon=args.horizon,
+        horizon=args.horizon if 'nutassembly' not in task_type else args.horizon + TELEPORT_STEPS,
         **task_kwargs
     )
 
@@ -346,7 +346,7 @@ def make_video_env(args):
             # Auto-select Wipe profile when user hasn't explicitly overridden --llm_profile
             llm_profile_path = "configs/wipe_impedance_profile.yaml"
     
-    stiffness_penalty = 0.002 if task_type == 'wipe' else 0.05
+    stiffness_penalty = 0.002 if task_type == 'wipe' else 0.01
 
     env = GeometricWrapper(
         env=env,
@@ -430,7 +430,7 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             reward_shaping=True,
             control_freq=20,
             ignore_done=False,
-            horizon=args.horizon,
+            horizon=args.horizon if 'nutassembly' not in task_type else args.horizon + TELEPORT_STEPS,
             **task_kwargs
         )
         
@@ -455,7 +455,8 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             elif 'door' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
                 llm_profile_path = "configs/door_impedance_profile.yaml"
         
-        stiffness_penalty = 0.002 if task_type == 'wipe' else 0.05
+        stiffness_penalty = 0.002 if task_type == 'wipe' else 0.01
+        print(f'Using stiffness penalty of {stiffness_penalty}')
 
         env = GeometricWrapper(
             env=env,
@@ -546,6 +547,7 @@ def main():
         config=vars(args),
         sync_tensorboard=True,
         monitor_gym=True,
+        settings=wandb.Settings(init_timeout=300)
     )
 
     env_fns = [make_env(args, is_eval=False, rank=i) for i in range(args.n_envs)]

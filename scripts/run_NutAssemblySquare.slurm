@@ -6,7 +6,7 @@
 #SBATCH --error=logs/nutsquare_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task=80
 #SBATCH --mem=160G
 #SBATCH --time=168:00:00
 #SBATCH --gres=gpu:lovelace:1
@@ -15,6 +15,25 @@ set -e
 
 eval "$(conda shell.bash hook)"
 conda activate tfm
+
+# Force MuJoCo EGL rendering to use the SLURM-assigned GPU to prevent VRAM splitting
+export MUJOCO_GL="egl"
+export MUJOCO_EGL_DEVICE_ID=$(python3 -c "
+import os, glob
+try:
+    cuda_id = os.environ.get('CUDA_VISIBLE_DEVICES', '0').split(',')[0]
+    pci_full = os.popen(f'nvidia-smi --id={cuda_id} --query-gpu=pci.bus_id --format=csv,noheader').read().strip().lower()
+    pci_short = pci_full.split(':')[-2] + ':' + pci_full.split(':')[-1]
+    
+    for i, node in enumerate(sorted(glob.glob('/sys/class/drm/renderD*/device'))):
+        drm_pci = os.path.basename(os.path.realpath(node)).lower()
+        if pci_short in drm_pci:
+            print(i)
+            exit(0)
+except Exception:
+    pass
+print(0)
+")
 
 mkdir -p logs/nut_square
 
@@ -25,16 +44,15 @@ export MALLOC_ARENA_MAX=1
 
 TASK="NutAssemblySquare"
 STEPS=1000000
-HORIZON=60
+HORIZON=80
 N_ENVS=8
-# GAMMA=0.95
-GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+GAMMA=0.90
+# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
 SEEDS=(1 2 3)
-HORIZON=150
 
-LLM_W_INIT=0.7
-LLM_W_FLOOR=0.4
-LLM_ANNEAL=$((STEPS * 75 / 100 / N_ENVS))
+LLM_W_INIT=0.8
+LLM_W_FLOOR=0.05
+LLM_ANNEAL=$((STEPS * 25 / 100 / N_ENVS))
 LLM_BACKEND="ollama"
 LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=20

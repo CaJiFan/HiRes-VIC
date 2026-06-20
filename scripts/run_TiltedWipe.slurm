@@ -6,39 +6,35 @@
 #SBATCH --error=logs/wipe_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task=80
 #SBATCH --mem=160G
-#SBATCH --time=168:00:00
+#SBATCH --time=48:00:00
 #SBATCH --gres=gpu:lovelace:1
 
-# =============================================================================
-# Run TiltedWipe environment experiments (HiRes-VIC thesis)
-#
-# Ablation matrix:
-#   Section A — Geometric prior only (no LLM)
-#     BASELINE   — diagonal variable_kp (linear scale)
-#     DIAG       — diagonal SPD (log-scale exponential map)
-#     SPD_ONLY   — full 3×3 SPD manifold (Mandel basis)
-#     LIE_ONLY   — SO(3) log-map observation only
-#     FULL_GRL   — full SPD + SO(3) log-map observation
-#
-#   Section B — Geometric + LLM semantic prior (SPD configs only)
-#     SPD_LLM    — SPD manifold + LLM impedance prior (annealed)
-#     FULL_LLM   — SPD + SO(3) + LLM impedance prior (annealed)
-#
-# LLM setup:
-#   - Ollama must be running locally (ollama serve) with llama3.2 pulled
-#   - Profile: configs/wipe_impedance_profile.yaml (auto-selected by train_fixed.py)
-#   - w schedule: prior_weight=0.7 → anneal_floor=0.05 over 75% of training
-#
-# Usage:
-#   sbatch scripts/run_TiltedWipe.slurm
-# =============================================================================
 
 set -e
 
 eval "$(conda shell.bash hook)"
 conda activate tfm
+
+# Force MuJoCo EGL rendering to use the SLURM-assigned GPU to prevent VRAM splitting
+export MUJOCO_GL="egl"
+export MUJOCO_EGL_DEVICE_ID=$(python3 -c "
+import os, glob
+try:
+    cuda_id = os.environ.get('CUDA_VISIBLE_DEVICES', '0').split(',')[0]
+    pci_full = os.popen(f'nvidia-smi --id={cuda_id} --query-gpu=pci.bus_id --format=csv,noheader').read().strip().lower()
+    pci_short = pci_full.split(':')[-2] + ':' + pci_full.split(':')[-1]
+    
+    for i, node in enumerate(sorted(glob.glob('/sys/class/drm/renderD*/device'))):
+        drm_pci = os.path.basename(os.path.realpath(node)).lower()
+        if pci_short in drm_pci:
+            print(i)
+            exit(0)
+except Exception:
+    pass
+print(0)
+")
 
 mkdir -p logs/wipe
 
@@ -50,20 +46,20 @@ export MALLOC_ARENA_MAX=1
 
 # ── Fixed hypers ──────────────────────────────────────────────────────────────
 TASK="TiltedWipe"
-STEPS=2000000
-HORIZON=200
+STEPS=1000000
+HORIZON=150
 N_ENVS=8
-# GAMMA=0.95
-GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
-NUM_MARKERS=100
+GAMMA=0.95
+# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+NUM_MARKERS=50
 SEEDS=(1 2 3)
 
 # ── LLM prior schedule ────────────────────────────────────────────────────────
 # Anneal from W_INIT → W_FLOOR over the first 75% of per-env steps.
 # Per-env steps ≈ STEPS / N_ENVS = 125,000. 75% of that = 93,750.
-LLM_W_INIT=0.7
-LLM_W_FLOOR=0.4
-LLM_ANNEAL=$((STEPS * 75 / 100 / N_ENVS))   # = 93,750
+LLM_W_INIT=0.8
+LLM_W_FLOOR=0.05
+LLM_ANNEAL=$((STEPS * 25 / 100 / N_ENVS))   # = 31,250
 LLM_BACKEND="ollama"
 LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=50
@@ -115,7 +111,7 @@ run_geo() {
         --num_markers "$NUM_MARKERS"
         --seed "$SEED"
         --record_video
-        --camera_names "frontview,robot0_eye_in_hand"
+        --camera_names "frontview"
     )
     [ "$USE_SPD"  == "TRUE" ] && ARGS+=(--use_spd)
     [ "$USE_LIE"  == "TRUE" ] && ARGS+=(--use_lie)
@@ -189,39 +185,39 @@ for SEED in "${SEEDS[@]}"; do
 
     # 1. BASELINE — diagonal variable_kp, Euclidean obs
     wait_for_queue
-    run_geo "FALSE" "FALSE" "FALSE" "BASELINE_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "FALSE" "BASELINE_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 2. DIAG — diagonal SPD (log-scale exponential map)
     wait_for_queue
-    run_geo "FALSE" "FALSE" "TRUE"  "DIAG_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "TRUE"  "DIAG_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 3. SPD_ONLY — full 3×3 SPD manifold
     wait_for_queue
-    run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 4. LIE_ONLY — SO(3) Lie-group observation only
     wait_for_queue
-    run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 5. FULL_GRL — full SPD + SO(3) Lie-group observation
     wait_for_queue
-    run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 6. BASELINE with LLM
     wait_for_queue
-    run_llm "FALSE"  "FALSE" "BASELINE_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "FALSE"  "FALSE" "BASELINE_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     # 7. SPD with LLM
     wait_for_queue
-    run_llm "TRUE"  "FALSE" "SPD_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "TRUE"  "FALSE" "SPD_ONLY_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     # 8. LIE with LLM
     wait_for_queue
-    run_llm "FALSE" "TRUE"  "LIE_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "FALSE" "TRUE"  "LIE_ONLY_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     # 9. FULL_GRL + LLM
     wait_for_queue
-    run_llm "TRUE"  "TRUE"  "FULL_GRL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "TRUE"  "TRUE"  "FULL_GRL_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
 done
 

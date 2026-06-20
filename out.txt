@@ -1,0 +1,14 @@
+CODE at 2026-06-15T20:22:46Z, Last User: 2026-06-15T20:22:33Z <USER_REQUEST> one very last question, in the pih_curriculum.py, in the RobosuiteTeleportWrapper as 
+CODE at 2026-06-15T20:57:32Z, Last User: 2026-06-15T20:52:07Z <USER_REQUEST> idk what happened, but now all my non-riemannain configs (BASELINE and LIE_ONLY) are 
+CODE at 2026-06-15T21:52:03Z, Last User: 2026-06-15T21:44:31Z <USER_REQUEST> now for some reason, checking the video rollouts, the non-riemannian configs are not 
+CODE at 2026-06-15T21:52:21Z, Last User: 2026-06-15T21:44:31Z <USER_REQUEST> now for some reason, checking the video rollouts, the non-riemannian configs are not 
+CODE at 2026-06-15T23:08:30Z, Last User: 2026-06-15T23:08:02Z <USER_REQUEST> ok then should i remove the if len(action) >= 13: block? it's useless now, right? </U
+CODE at 2026-06-15T23:48:50Z, Last User: 2026-06-16T00:10:13Z <USER_REQUEST> ok now, peg_head_pos does not exist, these are the keys "odict_keys(['robot0_joint_po
+CODE at 2026-06-16T00:11:15Z, Last User: 2026-06-16T00:10:13Z <USER_REQUEST> ok now, peg_head_pos does not exist, these are the keys "odict_keys(['robot0_joint_po
+CODE at 2026-06-16T00:11:30Z, Last User: 2026-06-16T00:10:13Z <USER_REQUEST> ok now, peg_head_pos does not exist, these are the keys "odict_keys(['robot0_joint_po
+CODE at 2026-06-17T00:50:14Z, Last User: 2026-06-17T00:27:13Z <USER_REQUEST> ok regarding the open questions 1) yes go ahead and check the logs, u decide which ap
+CODE at 2026-06-17T00:53:35Z, Last User: 2026-06-17T00:27:13Z <USER_REQUEST> ok regarding the open questions 1) yes go ahead and check the logs, u decide which ap
+CODE at 2026-06-19T01:41:57Z, Last User: 2026-06-19T01:41:11Z <USER_REQUEST> why with this change now is it possible for the arm to "go up"? it shouldn't be able 
+CODE at 2026-06-19T01:42:06Z, Last User: 2026-06-19T01:41:11Z <USER_REQUEST> why with this change now is it possible for the arm to "go up"? it shouldn't be able 
+CODE at 2026-06-19T21:37:00Z, Last User: 2026-06-19T21:36:30Z <USER_REQUEST> ok, can u check again that the DIAG config is doing proper riemannian methods/operati
+CODE at 2026-06-20T11:27:18Z, Last User: 2026-06-20T11:26:34Z <USER_REQUEST> Here's two examples of Door env runs with gamma=0.95 (their best seeds) the only diff
