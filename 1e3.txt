@@ -1,4 +1,0 @@
-2026-06-20T12:50:19Z **1) Modifications to improve performance?** Now that your core mathematical bottlenecks (the stiffness penalty bug, the inverse-kinematics singularit
-2026-06-20T12:58:05Z Here is a quick breakdown of the core SAC hyperparameters you can tweak and exactly what they do under the hood.   Since you are running complex geome
-2026-06-20T13:00:22Z Awesome, I see it! You're already running `batch_size=512`, and you just bumped the `learning_rate` to `1e-3`.   That is exactly the "power combo" I w
-2026-06-20T20:44:22Z We can absolutely validate this, and I have great news: **Seed 1 was definitely launched AFTER the penalty was changed to `0.01`!**  Here is the exact

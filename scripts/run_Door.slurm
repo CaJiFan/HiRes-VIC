@@ -43,14 +43,15 @@ TASK="Door"
 STEPS=1000000
 HORIZON=50
 N_ENVS=8
-GAMMA=0.95
-# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+LR=3e-4
+# GAMMA=0.90
+GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
 SEEDS=(1 2 3)
 
 # ── LLM prior schedule ────────────────────────────────────────────────────────
 # Anneal from W_INIT → W_FLOOR over the first 25% of per-env steps.
 # Per-env steps ≈ STEPS / N_ENVS = 250,000 / 8 = 31,250.
-LLM_W_INIT=0.8
+LLM_W_INIT=0.5
 LLM_W_FLOOR=0.05
 LLM_ANNEAL=$((STEPS * 25 / 100 / N_ENVS))   # = 31,250
 LLM_BACKEND="ollama"
@@ -58,7 +59,7 @@ LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=12
 
 wait_for_queue() {
-    while [ $(jobs -pr | wc -l) -gt 9 ]; do
+    while [ $(jobs -pr | wc -l) -ge 9 ]; do
         sleep 10
     done
 }
@@ -107,6 +108,7 @@ run_geo() {
         --n_envs "$N_ENVS"
         --gamma "$GAMMA"
         --seed "$SEED"
+        --lr "$LR"
         --record_video
         --camera_names "frontview"
         --primitive_init none
@@ -142,6 +144,7 @@ run_llm() {
         --n_envs "$N_ENVS"
         --gamma "$GAMMA"
         --seed "$SEED"
+        --lr "$LR"
         --record_video
         --camera_names "frontview"
         --primitive_init none
@@ -185,39 +188,35 @@ for SEED in "${SEEDS[@]}"; do
 
     # 1. BASELINE — diagonal variable_kp, Euclidean obs
     wait_for_queue
-    run_geo "FALSE" "FALSE" "FALSE" "BASELINE_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "FALSE" "BASELINE_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 2. DIAG — diagonal SPD (log-scale exponential map)
     wait_for_queue
-    run_geo "FALSE" "FALSE" "TRUE"  "DIAG_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "TRUE"  "DIAG_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 3. SPD_ONLY — full 3×3 SPD manifold
     wait_for_queue
-    run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
     
     # 4. LIE — SO(3) Lie-group observation only
     wait_for_queue
-    run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 5. FULL_GRL — full SPD + SO(3) Lie-group observation
     wait_for_queue
-    run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_FINAL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     # 6. BASELINE with LLM
     wait_for_queue
-    run_llm "FALSE" "FALSE" "BASELINE_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "FALSE" "FALSE" "BASELINE_FINAL_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     # 7. SPD with LLM
     wait_for_queue
-    run_llm "TRUE"  "FALSE" "SPD_ONLY_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
-    
-    # 8. LIE with LLM
-    wait_for_queue
-    run_llm "FALSE" "TRUE"  "LIE_ONLY_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "TRUE"  "FALSE" "SPD_ONLY_FINAL_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     # 9. FULL_GRL + LLM
     wait_for_queue
-    run_llm "TRUE"  "TRUE"  "FULL_GRL_FINAL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_llm "TRUE"  "TRUE"  "FULL_GRL_FINAL_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
 done
 

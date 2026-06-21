@@ -1,2 +1,0 @@
-2026-06-20T00:07:42Z <USER_REQUEST> ok nice catch! but do you recommend this? that all of them have this early termination ? </USER_REQUEST> <ADDITIONAL_METADATA> The curr
-2026-06-20T11:26:34Z <USER_REQUEST> Here's two examples of Door env runs with gamma=0.95 (their best seeds) the only difference is that the purple one is an older version 

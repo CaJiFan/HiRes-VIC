@@ -166,16 +166,13 @@ for SEED in "${SEEDS[@]}"; do
     run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
-    run_geo "TRUE"  "TRUE"  "FALSE" "FULLGRL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
     run_llm "FALSE"  "FALSE" "BASELINE_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
     run_llm "TRUE"  "FALSE" "SPD_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
-
-    wait_for_queue
-    run_llm "FALSE" "TRUE"  "LIE_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
     run_llm "TRUE"  "TRUE"  "FULL_GRL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &

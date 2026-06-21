@@ -143,7 +143,6 @@ def nutassembly_task_metrics_fn(env, info):
         
     return metrics
 
-
 def door_task_metrics_fn(env, info):
     """Metrics for the Robosuite Door environment.
 
@@ -216,6 +215,7 @@ def parse_args():
     parser.add_argument("--fixed_kp", type=int, default=150, help="Fixed kp value")
     parser.add_argument("--gamma", type=float, default=0.99, help="gamma parameter for SAC algorithm")
     parser.add_argument("--horizon", type=int, default=170, help="Horizon parameter for SAC algorithm")
+    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for SAC algorithm")
 
 
     parser.add_argument("--use_llm_prior", action="store_true")
@@ -559,7 +559,7 @@ def main():
         env,
         verbose=1,
         tensorboard_log=f"./outputs/logs/{run_name}",
-        learning_rate=3e-4,
+        learning_rate=args.lr,
         batch_size=512,
         buffer_size=1_000_000,
         tau=0.002,                  # For soft updates of the target network
