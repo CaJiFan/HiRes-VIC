@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=80
-#SBATCH --mem=160G
+#SBATCH --mem=100G
 #SBATCH --time=168:00:00
 #SBATCH --gres=gpu:lovelace:1
 
@@ -43,22 +43,23 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:1024
 export MALLOC_ARENA_MAX=1
 
 TASK="NutAssemblySquare"
-STEPS=1000000
+STEPS=2000000
 HORIZON=80
 N_ENVS=8
-GAMMA=0.90
-# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
-SEEDS=(1 2 3)
+# GAMMA=0.90
+GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+SEEDS=(0 1 2 3 4 5 6 7 8 9)
+LR=3e-4
 
-LLM_W_INIT=0.8
-LLM_W_FLOOR=0.05
-LLM_ANNEAL=$((STEPS * 25 / 100 / N_ENVS))
+LLM_W_INIT=0.6
+LLM_W_FLOOR=0.0
+LLM_ANNEAL=$((STEPS * 50 / 100 / N_ENVS))   # anneal over 50% of per-env steps
 LLM_BACKEND="ollama"
 LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=20
 
 wait_for_queue() {
-    while [ $(jobs -pr | wc -l) -ge 9 ]; do
+    while [ $(jobs -pr | wc -l) -ge 11 ]; do
         sleep 10
     done
 }
@@ -67,9 +68,9 @@ export OLLAMA_MODELS="/home/cjimenez/ollama_models"
 UNIQUE_PORT=$((11000 + (SLURM_JOB_ID % 1000)))
 export OLLAMA_HOST="127.0.0.1:${UNIQUE_PORT}"
 
-echo "Starting Ollama server on port ${UNIQUE_PORT}..."
-~/.local/bin/ollama serve &
-sleep 10
+# echo "Starting Ollama server on port ${UNIQUE_PORT}..."
+# ~/.local/bin/ollama serve &
+# sleep 10
 
 check_ollama() {
     OLLAMA_RESPONSE=$(curl -s -X POST "http://${OLLAMA_HOST}/api/generate" -d '{
@@ -96,6 +97,7 @@ run_geo() {
         --n_envs "$N_ENVS"
         --gamma "$GAMMA"
         --seed "$SEED"
+        --lr "$LR"
         --record_video
         --camera_names "frontview,robot0_eye_in_hand"
         --primitive_init teleport
@@ -124,6 +126,7 @@ run_llm() {
         --n_envs "$N_ENVS"
         --gamma "$GAMMA"
         --seed "$SEED"
+        --lr "$LR"
         --record_video
         --camera_names "frontview,robot0_eye_in_hand"
         --primitive_init teleport
@@ -143,43 +146,45 @@ run_llm() {
     echo "  ✅ Done: ${EXP_NAME} SEED=${SEED}"
 }
 
-echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
-if ! check_ollama; then
-    echo "❌ Ollama not responding. Aborting."
-    exit 1
-fi
-echo "✅ Ollama OK — proceeding."
+# echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
+# if ! check_ollama; then
+#     echo "❌ Ollama not responding. Aborting."
+#     exit 1
+# fi
+# echo "✅ Ollama OK — proceeding."
 
 for SEED in "${SEEDS[@]}"; do
     echo "════════════════  SEED ${SEED}  ════════════════"
 
     wait_for_queue
-    run_geo "FALSE" "FALSE" "FALSE" "BASELINE_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "FALSE" "NAS_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
-    run_geo "FALSE" "FALSE" "TRUE"  "DIAG_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "TRUE"  "NAS_DIAG_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
-    run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "FALSE" "FALSE" "NAS_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
-    run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "TRUE"  "FALSE" "NAS_LIE_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
     wait_for_queue
-    run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "TRUE"  "FALSE" "NAS_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
-    wait_for_queue
-    run_llm "FALSE"  "FALSE" "BASELINE_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # wait_for_queue
+    # run_llm "FALSE"  "FALSE" "NAS_BASELINE_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
-    wait_for_queue
-    run_llm "TRUE"  "FALSE" "SPD_ONLY_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # wait_for_queue
+    # run_llm "TRUE"  "FALSE" "NAS_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
-    wait_for_queue
-    run_llm "TRUE"  "TRUE"  "FULL_GRL_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # wait_for_queue
+    # run_llm "TRUE"  "TRUE"  "NAS_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
     
     # Wait for all 9 jobs of the current seed to finish before moving to the next seed
     # wait
 done
+
+wait
 
 echo "��  All NutAssemblySquare experiments complete!"
 conda deactivate

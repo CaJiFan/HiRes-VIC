@@ -93,3 +93,5 @@ third_party/*
 # Thesis Manuscript (private)
 # ==========================
 manuscript/
+
+latex*

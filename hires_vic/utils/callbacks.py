@@ -30,7 +30,18 @@ class RobosuiteLoggingCallback(BaseCallback):
             self._mode_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
             self._mode_force:  dict[int, dict[str, list]] = defaultdict(lambda: defaultdict(list))
 
+        self._last_logged_gamma: float | None = None
+
     def _on_step(self) -> bool:
+        # Always log the model's current gamma
+        current_gamma = getattr(self.model, "gamma", None)
+        if current_gamma is not None:
+            if self._last_logged_gamma != round(current_gamma, 6):
+                self.logger.record("train/gamma", current_gamma)
+                if wandb.run is not None:
+                    wandb.log({"train/gamma": current_gamma}, commit=False)
+                self._last_logged_gamma = round(current_gamma, 6)
+
         dones = self.locals.get("dones")
         infos = self.locals.get("infos")
 
@@ -94,6 +105,10 @@ class RobosuiteLoggingCallback(BaseCallback):
                     ("smoothness/max_ang_accel",          "smoothness/max_ang_accel"),
                     ("smoothness/std_force",              "smoothness/std_force"),
                     ("smoothness/avg_force",              "smoothness/avg_force"),
+                    ("smoothness/spd_pre_clamp_eigmax_avg",  "smoothness/spd_pre_clamp_eigmax_avg"),
+                    ("smoothness/spd_pre_clamp_eigmax_peak", "smoothness/spd_pre_clamp_eigmax_peak"),
+                    ("smoothness/spd_clamp_violations",      "smoothness/spd_clamp_violations"),
+                    ("smoothness/spd_max_offdiag_peak",      "smoothness/spd_max_offdiag_peak"),
                     ("physics/avg_stiffness",             "physics/avg_stiffness"),
                     ("physics/avg_force",                 "physics/avg_force"),
                     # LLM-specific (present only if using the LLM planner)
@@ -137,6 +152,74 @@ class RobosuiteLoggingCallback(BaseCallback):
                         self.logger.record(log_key, info[key])
 
         return True
+
+
+class GammaCurriculumCallback(BaseCallback):
+    """Smoothly anneals the SAC discount factor (gamma) from gamma_start to
+    gamma_end between two training milestones.
+
+    Why smooth annealing instead of a hard switch
+    ─────────────────────────────────────────────
+    SAC stores raw (s, a, r, s', done) tuples in its ReplayBuffer — gamma
+    is NOT baked in. It is applied at train-time inside the Bellman target:
+
+        y = r + γ * (1 - done) * min(Q1_target(s', a'), Q2_target(s', a'))
+
+    So updating ``self.model.gamma`` is the only change needed; the replay
+    buffer requires zero modification.
+
+    However, a hard gamma jump (e.g., 0.95 → 0.9933 in one step) causes a
+    sudden increase in Bellman targets that the Q-network's current weights
+    weren't calibrated for, producing a short overestimation spike and a
+    temporary performance dip. Linear annealing over ramp_steps eliminates
+    this spike by letting the Q-network adapt incrementally.
+
+    Parameters
+    ----------
+    gamma_start : float
+        Initial discount factor (e.g., 0.95 for fast early learning).
+    gamma_end : float
+        Final discount factor (e.g., 0.9933 = 1 - 1/H for full horizon).
+    anneal_start_steps : int
+        Global timestep at which annealing begins.
+    anneal_end_steps : int
+        Global timestep at which gamma reaches gamma_end and stays there.
+    verbose : int
+    """
+
+    def __init__(
+        self,
+        gamma_start: float,
+        gamma_end: float,
+        anneal_start_steps: int,
+        anneal_end_steps: int,
+        verbose: int = 1,
+    ):
+        super().__init__(verbose)
+        self.gamma_start = gamma_start
+        self.gamma_end = gamma_end
+        self.anneal_start_steps = anneal_start_steps
+        self.anneal_end_steps = anneal_end_steps
+        self._ramp = anneal_end_steps - anneal_start_steps
+        self._last_logged_gamma: float | None = None
+
+    def _on_step(self) -> bool:
+        t = self.num_timesteps
+
+        if t < self.anneal_start_steps:
+            gamma = self.gamma_start
+        elif t >= self.anneal_end_steps:
+            gamma = self.gamma_end
+        else:
+            # Linear interpolation over the ramp window
+            progress = (t - self.anneal_start_steps) / self._ramp
+            gamma = self.gamma_start + progress * (self.gamma_end - self.gamma_start)
+
+        # Update the model's gamma (SAC reads self.gamma inside train())
+        self.model.gamma = gamma
+
+        return True
+
 
 class VideoRecorderCallback(BaseCallback):
     """Callback for recording a single rollout to wandb at regular intervals.
@@ -197,12 +280,15 @@ class VideoRecorderCallback(BaseCallback):
         frames = []
 
         if teleport_wrapper is not None:
-            # NutAssembly path: collect teleport animation frames first
-            teleport_wrapper = self.video_env.env
-            teleport_wrapper.frames.clear()
+            # NutAssembly path: collect teleport animation frames first (if supported)
+            if hasattr(teleport_wrapper, 'frames'):
+                teleport_wrapper.frames.clear()
             reset_out = self.video_env.reset()
-            teleport_wrapper.reset()
-            frames += teleport_wrapper.frames
+            # If the wrapper doesn't intercept reset correctly, we might need to reset it, 
+            # but usually video_env.reset() propagates down. 
+            # The previous code called teleport_wrapper.reset() again, which is redundant.
+            if hasattr(teleport_wrapper, 'frames'):
+                frames += teleport_wrapper.frames
         else:
             # Door / Wipe / generic path: no teleport, just reset
             reset_out = self.video_env.reset()

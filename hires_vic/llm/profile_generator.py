@@ -88,6 +88,100 @@ TASK_SPECS: dict[str, dict] = {
         "success_criteria": "red cube stably resting on top of blue cube",
         "suggested_phases": ["approach", "grasp", "lift", "place"],
     },
+    # ── TiltedWipe (45°) ──────────────────────────────────────────────────────
+    # Factual inputs only — no pre-solved thresholds or axis-specific answers.
+    # Let the LLM reason about geometry, compliance, and phase structure itself.
+    "TiltedWipe": {
+        "name": "TiltedWipe (Robosuite, 45° tilt)",
+        "robot": "7-DOF Panda arm with a flat wiping tool rigidly attached to the EEF",
+        "description": (
+            "The Panda arm must use the wiping tool to clear N dirt markers "
+            "from a flat table surface that is tilted 45° around the world Y-axis. "
+            "The robot starts above the table and must descend to make contact, "
+            "then sweep the tool across all marker locations to achieve full coverage."
+        ),
+        "geometry": (
+            "Table tilt: 45° pitch around the world Y-axis. "
+            "The impedance controller is expressed in the world frame: "
+            "stiffness is a diagonal [Kx, Ky, Kz] in world-X, world-Y, world-Z axes."
+        ),
+        "key_challenges": [
+            "Maintaining sustained surface contact on the tilted table throughout the episode",
+            "Generating enough lateral force authority to drive the wiping stroke across markers",
+            "Avoiding excessive contact force that could cause tool bounce or joint limit violations",
+            "The table is not horizontal — the contact normal is not aligned with world-Z",
+        ],
+        "reward_signals": (
+            "The reward combines: a per-step bonus for maintaining surface contact (binary — "
+            "zero if not touching the table), a bonus for each new marker wiped (only while "
+            "in contact), a reaching bonus proportional to proximity to unwiped markers, "
+            "a large completion bonus if all markers are cleared, and penalties for "
+            "excessive contact force and jerky end-effector motion."
+        ),
+        "motion_pattern": (
+            "The workspace is small enough that all markers are reachable in a single "
+            "continuous sweeping stroke. The expected trajectory is: descend to the surface "
+            "(no contact), establish contact, then sweep continuously without lifting off. "
+            "A mid-episode 'lift' or 'reposition' phase does not occur in practice and "
+            "would be observationally indistinguishable from the initial approach."
+        ),
+        "available_obs": [
+            "EEF position in world frame (xyz)",
+            "Surface contact flag (True/False)",
+            "Wipe completion fraction [0.0, 1.0]",
+            "Distance to centroid of remaining unwiped markers (metres)",
+        ],
+        "success_criteria": "All N dirt markers cleared within the episode horizon.",
+        "suggested_phases": ["approach", "transition", "wipe"],
+    },
+
+    # ── TiltedWipev3 (60°) ───────────────────────────────────────────────────
+    # Steeper tilt: surface normal is more asymmetric [0.866, 0, 0.5].
+    # Contact normal is predominantly in world-X, making axis-specific compliance
+    # significantly harder to get right — designed to stress-test Riemannian geometry.
+    "TiltedWipev3": {
+        "name": "TiltedWipev3 (Robosuite, 60° tilt)",
+        "robot": "7-DOF Panda arm with a flat wiping tool rigidly attached to the EEF",
+        "description": (
+            "The Panda arm must use the wiping tool to clear N dirt markers "
+            "from a flat table surface that is steeply tilted 60° around the world Y-axis. "
+            "The robot starts above the table and must descend to make contact, "
+            "then sweep the tool across all marker locations to achieve full coverage. "
+            "The steep tilt makes contact normal force management more demanding than "
+            "at 45° and requires careful axis-specific impedance tuning."
+        ),
+        "geometry": (
+            "Table tilt: 60° pitch around the world Y-axis. "
+            "The impedance controller is expressed in the world frame: "
+            "stiffness is a diagonal [Kx, Ky, Kz] in world-X, world-Y, world-Z axes."
+        ),
+        "key_challenges": [
+            "Maintaining sustained surface contact on a steeply tilted (60°) surface",
+            "The steep tilt means contact-normal compliance is more strongly required "
+            "in world-X than in world-Z — asymmetric axis requirements",
+            "Generating enough lateral stroke force while conforming to the tilted surface",
+            "Avoiding excessive contact force or arm instability due to the steep angle",
+            "The contact normal is far from world-Z at 60° tilt",
+        ],
+        "reward_signals": (
+            "Same reward structure as TiltedWipe (45°): per-step surface contact bonus "
+            "(binary), per-marker wipe bonus (only while in contact), proximity reaching "
+            "bonus, completion bonus, and penalties for excessive force and jerky motion."
+        ),
+        "motion_pattern": (
+            "Same as TiltedWipe (45°): single continuous sweep without lifting off. "
+            "Expected trajectory: descend → establish contact → sweep continuously. "
+            "No mid-episode repositioning phase occurs."
+        ),
+        "available_obs": [
+            "EEF position in world frame (xyz)",
+            "Surface contact flag (True/False)",
+            "Wipe completion fraction [0.0, 1.0]",
+            "Distance to centroid of remaining unwiped markers (metres)",
+        ],
+        "success_criteria": "All N dirt markers cleared within the episode horizon.",
+        "suggested_phases": ["approach", "transition", "wipe"],
+    },
 }
 
 GENERATOR_SYSTEM_PROMPT = """\
@@ -109,8 +203,8 @@ Rules:
 - Provide 3–5 phases that cover the task's contact-rich sub-tasks.
 - Choose stiffness values based on physical reasoning (e.g., compliance
   perpendicular to a contact surface, stiffness along the action axis).
-- kp values must be in [1, 300]. Use lower values (1–50) for compliant axes
-  and higher (100–300) for precision/force axes.
+- kp values must be in [1, 300]. Use lower values for compliant axes
+  and higher for precision/force axes.
 - The planner_prompt must be self-contained and tell the runtime LLM to
   respond with ONLY the mode name, nothing else.
 - Output ONLY valid YAML — no prose, no markdown fences, no extra keys.
@@ -123,17 +217,45 @@ def _build_user_message(spec: dict) -> str:
         f"Robot: {spec['robot']}",
         f"Description: {spec['description']}",
         f"Primary action axis: {spec.get('insertion_axis', 'Z')}",
-        "Key challenges:",
     ]
+
+    if "geometry" in spec:
+        lines.append(f"Geometry / coordinate frame: {spec['geometry']}")
+
+    lines.append("Key challenges:")
     for c in spec.get("key_challenges", []):
         lines.append(f"  - {c}")
-    lines.append("Available observations:")
+
+    if "physical_failure_modes" in spec:
+        lines.append("Physical failure modes to avoid:")
+        for f in spec["physical_failure_modes"]:
+            lines.append(f"  ⚠ {f}")
+
+    if "reward_signals" in spec:
+        lines.append(f"Reward signals: {spec['reward_signals']}")
+
+    if "hardware_limits" in spec:
+        lines.append(f"Hardware limits: {spec['hardware_limits']}")
+
+    lines.append("Available observations at runtime:")
     for o in spec.get("available_obs", []):
         lines.append(f"  - {o}")
+
     lines.append(f"Success criteria: {spec.get('success_criteria', 'task complete')}")
+
+    if "motion_pattern" in spec:
+        lines.append(f"Motion pattern / trajectory constraints: {spec['motion_pattern']}")
+
     lines.append(f"Suggested phase names: {spec.get('suggested_phases', [])}")
+
+    if "phase_hints" in spec:
+        lines.append("Per-phase impedance hints:")
+        for phase, hint in spec["phase_hints"].items():
+            lines.append(f"  [{phase}]: {hint}")
+
     lines.append("\nGenerate the impedance profile YAML now.")
     return "\n".join(lines)
+
 
 
 def generate_profile(

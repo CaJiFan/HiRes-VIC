@@ -45,7 +45,7 @@ WIPE_TASK_CONFIG = {
     "line_width": 0.04,
     "two_clusters": False,
     "coverage_factor": 0.6,
-    "num_markers": 100,
+    "num_markers": 50,
     "contact_threshold": 1.0,
     "pressure_threshold": 0.5,
     "pressure_threshold_max": 60.0,
@@ -206,7 +206,7 @@ def make_env(env_name, config_name, model_path=None):
         "has_offscreen_renderer": True,
         "use_camera_obs": False,
         "reward_shaping": True,
-        "horizon": 150 if env_name == "NutAssemblySquare" else (50 if env_name == "Door" else 300),
+        "horizon": 230 if env_name == "NutAssemblySquare" else (50 if env_name == "Door" else 150),
     }
 
     if "TILTED" in env_name.upper():
@@ -216,7 +216,7 @@ def make_env(env_name, config_name, model_path=None):
     env = GymWrapper(env)
     
     if "NutAssemblySquare" in env_name:
-        env = RobosuiteTeleportWrapper(env, setup_steps=90, is_eval=True)
+        env = RobosuiteTeleportWrapper(env, setup_steps=150, is_eval=True)
         # Monkey-patch _capture_frame so it correctly fetches frames without use_camera_obs=True
         def custom_capture_frame(self_instance):
             try:
@@ -243,7 +243,8 @@ def make_env(env_name, config_name, model_path=None):
         is_eval=True,
         task_type=task_type_str,
         use_llm_prior=use_llm,
-        llm_prior_weight=0.7,
+        llm_prior_weight=0.05 if "NutAssembly" in env_name else 0.4,
+        llm_anneal_floor=0.05 if "NutAssembly" in env_name else 0.4,
         llm_model="llama3.2",
         llm_profile_path=profile_path
     )
@@ -369,49 +370,65 @@ def parse_run_name(run_name):
     seed_match = re.search(r"SEED_(\d+)", run_name)
     gamma_match = re.search(r"G(\d+\.\d+)", run_name) or re.search(r"GAMMA(\d+\.\d+)", run_name, re.IGNORECASE)
     
-    seed = int(seed_match.group(1)) if seed_match else None
-    gamma = float(gamma_match.group(1)) if gamma_match else 0.90
-    
-    config = "BASELINE"
-    if "FULL_GRL" in run_name or "FULLGRL" in run_name: config = "FULL_GRL"
-    elif "SPD_ONLY" in run_name or "SPDONLY" in run_name: config = "SPD_ONLY"
-    elif "LIE_ONLY" in run_name or "LIEONLY" in run_name: config = "LIE_ONLY"
+    if "BASELINE" in run_name: config = "BASELINE"
+    elif "FULL_GRL" in run_name or "FULLGRL" in run_name: config = "FULL_GRL"
+    elif "SPD_ONLY" in run_name: config = "SPD_ONLY"
+    elif "LIE_ONLY" in run_name: config = "LIE_ONLY"
     elif "DIAG" in run_name: config = "DIAG"
+    else: return None
     
-    if "LLM" in run_name:
-        config += "_LLM"
-    
-    if env_str == "NUTASSEMBLYSQUARE" or "NUT_SQ" in run_name:
-        env_real = "NutAssemblySquare"
-        expected_h = 150
-    elif env_str == "DOOR":
+    is_llm = "LLM" in run_name
+    if is_llm: config += "_LLM"
+        
+    if env_str == "DOOR":
         env_real = "Door"
-        expected_h = 50
+        if "_FINAL_LR3e-4_" not in run_name: return None
+        if "_H50_" not in run_name: return None
+        if "_G0.95_" not in run_name: return None
+        if is_llm and "_LLM_W0.8_" not in run_name: return None
+        
     elif env_str == "TILTEDWIPE":
         env_real = "TiltedWipe"
-        expected_h = 200
+        if is_llm:
+            if "_FINAL_LR3e-4_" not in run_name: return None
+            if "_H150_" not in run_name: return None
+            if "_LLM_W0.8_" not in run_name: return None
+            if "_G0.95_" not in run_name: return None
+        else:
+            if "_FINAL_H150_" not in run_name: return None
+            if "_G0.95_" not in run_name: return None
+            
+    elif env_str == "NUTASSEMBLYSQUARE" or "NUT_SQ" in run_name:
+        env_real = "NutAssemblySquare"
+        if config == "FULL_GRL" and not is_llm:
+            if "FULLGRL_" not in run_name: return None
+        if "_H80_" not in run_name: return None
+        if "_G0.90_" not in run_name: return None
+        if is_llm and "_LLM_W0.8_" not in run_name: return None
     else:
         return None
         
-    # Check for H<number>
-    h_match = re.search(r"_H(\d+)_", run_name)
-    if not h_match:
-        return None
-    actual_h = int(h_match.group(1))
-    if actual_h != expected_h:
-        return None
-        
-    # Extra filter for TiltedWipe to ensure G0.98
-    if env_real == "TiltedWipe" and gamma != 0.98:
-        return None
-        
+    s_match = re.search(r"_SEED_(\d+)", run_name)
+    if not s_match: return None
+    seed = int(s_match.group(1))
+    
+    g_match = re.search(r"_G(\d+\.\d+)_", run_name)
+    gamma = float(g_match.group(1)) if g_match else 0.95
+    
     return env_real, config, gamma, seed
 
 def main():
     import argparse
+    from datetime import datetime
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", action="store_true", help="Run 1 episode of 1 model for fast testing")
     args = parser.parse_args()
+
+    # Timestamped output directory so re-runs never overwrite previous videos/CSVs
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"/home/cjimenez/projects/HiRes-VIC/outputs/eval_{timestamp}"
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {output_dir}")
 
     log_dir = "/home/cjimenez/projects/HiRes-VIC/logs/best_models"
     base_log_dir = "/home/cjimenez/projects/HiRes-VIC/logs"
@@ -438,7 +455,7 @@ def main():
     
     config_list = [
         "BASELINE", "DIAG", "LIE_ONLY", "SPD_ONLY", "FULL_GRL",
-        "BASELINE_LLM", "DIAG_LLM", "LIE_ONLY_LLM", "SPD_ONLY_LLM", "FULL_GRL_LLM"
+        "BASELINE_LLM", "SPD_ONLY_LLM", "FULL_GRL_LLM"
     ]
     
     for env in ["NutAssemblySquare", "Door", "TiltedWipe"]:
@@ -450,7 +467,7 @@ def main():
             if df_conf.empty: continue
             
             import imageio
-            video_path = f"/home/cjimenez/projects/HiRes-VIC/outputs/{env}_{config}_recap.mp4"
+            video_path = os.path.join(output_dir, f"{env}_{config}_recap.mp4")
             try:
                 video_writer = imageio.get_writer(video_path, fps=20)
             except Exception as e:
@@ -515,6 +532,8 @@ def main():
         return
 
     res_df = pd.DataFrame(final_results)
+    res_df.to_csv(os.path.join(output_dir, "chapter6_metrics.csv"), index=False)
+    # Also write a stable fixed-path copy for quick reference
     res_df.to_csv("/home/cjimenez/projects/HiRes-VIC/outputs/chapter6_metrics.csv", index=False)
     
     print("\n" + "="*50)

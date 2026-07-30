@@ -1,5 +1,6 @@
 import torch
 import math
+import random
 import gymnasium as gym
 import numpy as np
 import scipy.linalg as spla
@@ -19,6 +20,7 @@ class GeometricWrapper(gym.Wrapper):
         use_fixed=False,
         is_eval=False,
         stiffness_penalty=0.0,
+        success_bonus=0.0,
         force_penalty=0.0,
         terminate_on_unsafe=False,
         use_llm_prior=False,
@@ -29,24 +31,21 @@ class GeometricWrapper(gym.Wrapper):
         llm_profile_path=None,
         llm_anneal_steps=0,
         llm_anneal_floor=0.05,
+        llm_anneal_schedule="linear",
         task_type=None,
         task_metrics_fn=None,
         use_vision=False,
     ):
         super().__init__(env)
 
-        if task_type == 'nutassembly':
-            self.gym_env = self.env.env
-            self.teleport_wrapper = self.env
-        else:
-            self.gym_env = self.env
-            self.teleport_wrapper = None
+        self.gym_env = self.env
         
         self.use_spd_manifold = use_spd_manifold
         self.use_lie_group = use_lie_group
         self.use_diag_manifold = use_diag_manifold
         self.use_fixed = use_fixed
         self.stiffness_penalty = stiffness_penalty
+        self.success_bonus = success_bonus
         self.force_penalty = force_penalty
         self.terminate_on_unsafe = terminate_on_unsafe
         self.is_eval = is_eval
@@ -61,10 +60,20 @@ class GeometricWrapper(gym.Wrapper):
         self.coupling_history = []
         self.ang_accel_history = []
         self.force_history = []
+        # SPD explosion diagnostics
+        self._spd_pre_clamp_eigmax_history = []
+        self._spd_clamp_violations = 0
+        self._spd_coupling_max_history = []
 
         if self.is_eval:
             self.kp_history = []
         
+        # Seed deferred from make_env() — consumed on the first reset() call.
+        # This avoids calling env.reset(seed=...) explicitly in make_env, which
+        # would trigger a second full episode-setup sequence (e.g. TeleportWrapper
+        # scripted steps) on top of the one SubprocVecEnv already runs at init.
+        self._pending_seed: int | None = None
+
         # Internal counters for logging
         self.episode_force_sum = 0.0
         self.episode_steps = 0
@@ -101,6 +110,7 @@ class GeometricWrapper(gym.Wrapper):
                 image_size=(224, 224),
                 anneal_steps=llm_anneal_steps,
                 anneal_floor=llm_anneal_floor,
+                anneal_schedule=llm_anneal_schedule,
             )
 
             self._current_llm_mode = 'align'
@@ -255,8 +265,13 @@ class GeometricWrapper(gym.Wrapper):
     def reset(self, seed=None, options=None):
         # Robosuite's native reset doesn't take a seed directly in the call usually,
         # but we can set numpy's seed if needed.
-        if seed is not None:
-            np.random.seed(seed)
+        # Also consume any deferred seed stored by make_env() at construction time
+        # (avoids a second env.reset() call that would re-run TeleportWrapper setup).
+        effective_seed = seed if seed is not None else self._pending_seed
+        self._pending_seed = None  # consume once
+        if effective_seed is not None:
+            np.random.seed(effective_seed)
+            random.seed(effective_seed)
 
         # IMPORTANT: call self.env.reset() — NOT self.gym_env.reset().
         # For NutAssembly, self.env is TeleportWrapper, whose reset() runs all
@@ -301,6 +316,9 @@ class GeometricWrapper(gym.Wrapper):
         self.coupling_history = []
         self.ang_accel_history = []
         self.force_history = []
+        self._spd_pre_clamp_eigmax_history = []
+        self._spd_clamp_violations = 0
+        self._spd_coupling_max_history = []
 
         self.episode_force_sum = 0.0
         self.episode_steps = 0
@@ -342,42 +360,84 @@ class GeometricWrapper(gym.Wrapper):
         # We handle SPD blending directly on the manifold below.
         # For diagonal or baseline modes, Euclidean blending is mathematically valid or sufficient.
         if not self.use_spd_manifold and self.llm_planner is not None:
-            action[:self.prior_dim] = (1.0 - self.current_w) * action[:self.prior_dim] + (self.current_w * self.current_prior)
+            # Pure Bi-Linear Residual Mapping with w-scaling support
+            # If w=0.8, the agent can only explore 20% away from the prior.
+            # If w=0.0 (or annealed to 0), the agent gets 100% full exploration space.
+            a_rl = action[:self.prior_dim] * (1.0 - self.current_w)
+            a_prior = self.current_prior
+            # If a_rl > 0, interpolate between prior and 1.0. If a_rl < 0, interpolate between prior and -1.0
+            action[:self.prior_dim] = np.where(a_rl > 0, 
+                                               a_prior + a_rl * (1.0 - a_prior), 
+                                               a_prior + a_rl * (a_prior + 1.0))
 
         if self.use_spd_manifold:
-            log_min, log_max = math.log(self.min_kp), math.log(self.max_kp)
-
-            def get_spd_matrix(params):
-                m_params = params.copy()
-                m_params[0:3] = log_min + 0.5 * (m_params[0:3] + 1.0) * (log_max - log_min)
-                m_params[3:6] = m_params[3:6] * 0.2
+            def get_spd_matrix_absolute(physical_vals):
+                m_params = np.zeros(6, dtype=np.float32)
+                m_params[0:3] = np.log(physical_vals)
                 m_tensor = torch.tensor(m_params, dtype=torch.float32).unsqueeze(0)
                 return spd_grl_map(m_tensor).squeeze(0).detach().numpy()
             
-            K_rl = get_spd_matrix(action[:6])
-            # Regularise to keep matrices strictly positive-definite during early
-            # training when the RL policy may output near-zero stiffness actions.
-            # ε chosen small enough to be numerically negligible at steady-state.
             _EPS = 1e-4
-            K_rl = K_rl + _EPS * np.eye(3)
 
             if self.llm_planner is not None:
-                K_llm = get_spd_matrix(self.current_prior[:6])
-                K_llm = K_llm + _EPS * np.eye(3)
-                w = self.current_w
+                # 1. Decode LLM Prior linearly to prevent Limp Initialization
+                prior_physical = self.min_kp + 0.5 * (self.current_prior[:3] + 1.0) * (self.max_kp - self.min_kp)
+                K_llm = get_spd_matrix_absolute(prior_physical) + _EPS * np.eye(3)
                 
-                # Geodesic Blending on SPD Manifold to avoid Single Tangent Space Fallacy
-                K_llm_sqrt = spla.fractional_matrix_power(K_llm, 0.5)
-                K_llm_inv_sqrt = spla.fractional_matrix_power(K_llm, -0.5)
-                inner = K_llm_inv_sqrt @ K_rl @ K_llm_inv_sqrt
-                inner_pow = spla.fractional_matrix_power(inner, 1.0 - w)
-                kp_matrix = np.real(K_llm_sqrt @ inner_pow @ K_llm_sqrt)
+                # 2. Determine target optimal stiffness using unrestricted Bi-Linear Euclidean mapping
+                # Scale agent action by (1 - w) to support fixed constraints or annealing
+                a_rl = action[:3] * (1.0 - self.current_w)
+                a_prior = self.current_prior[:3]
+                a_final = np.where(a_rl > 0, a_prior + a_rl * (1.0 - a_prior), a_prior + a_rl * (a_prior + 1.0))
+                target_physical = self.min_kp + 0.5 * (a_final + 1.0) * (self.max_kp - self.min_kp)
+                
+                # 3. Tangent Space Absolute Mapping (Replaces Canonical Group Action)
+                m_params_rl = np.zeros(6, dtype=np.float32)
+                m_params_rl[0:3] = np.log(target_physical)
+                m_params_rl[3:6] = action[3:6] * 0.2 * (1.0 - self.current_w)  # Off-diagonal exploration
+                
+                m_tensor_rl = torch.tensor(m_params_rl, dtype=torch.float32).unsqueeze(0)
+                kp_matrix = np.real(spd_grl_map(m_tensor_rl).squeeze(0).detach().numpy())
 
-                # Linearly blend any remaining prior dims (like orientation kp_rot)
+                # ── Eigenvalue clamping ────────────────────────────────────────
+                # Clamping preserves SPD structure (all eigenvalues remain positive) 
+                # while guaranteeing physical validity within [min_kp, max_kp].
+                _eigvals, _eigvecs = np.linalg.eigh(kp_matrix)
+                _pre_clamp_max = float(np.max(_eigvals))
+                self._spd_pre_clamp_eigmax_history.append(_pre_clamp_max)
+                if _pre_clamp_max > self.max_kp or float(np.min(_eigvals)) < self.min_kp:
+                    self._spd_clamp_violations += 1
+                _eigvals = np.clip(_eigvals, self.min_kp, self.max_kp)
+                kp_matrix = _eigvecs @ np.diag(_eigvals) @ _eigvecs.T
+
+                # Bi-linear residual for remaining Euclidean prior dims (like orientation kp_rot)
+
                 if self.prior_dim > 6:
-                    action[6:self.prior_dim] = (1.0 - w) * action[6:self.prior_dim] + (w * self.current_prior[6:self.prior_dim])
+                    a_rl_rot = action[6:self.prior_dim] * (1.0 - self.current_w)
+                    a_prior_rot = self.current_prior[6:self.prior_dim]
+                    action[6:self.prior_dim] = np.where(a_rl_rot > 0, 
+                                                        a_prior_rot + a_rl_rot * (1.0 - a_prior_rot), 
+                                                        a_prior_rot + a_rl_rot * (a_prior_rot + 1.0))
             else:
-                kp_matrix = np.real(K_rl)
+                # Baseline SPD: Full 6D Mandel basis learning.
+                # Linear decoding for diagonals to prevent Limp Initialization.
+                target_physical = self.min_kp + 0.5 * (action[:3] + 1.0) * (self.max_kp - self.min_kp)
+                
+                m_params_rl = np.zeros(6, dtype=np.float32)
+                m_params_rl[0:3] = np.log(target_physical)
+                m_params_rl[3:6] = action[3:6] * 0.2  # Full 6D off-diagonal exploration
+                
+                m_tensor_rl = torch.tensor(m_params_rl, dtype=torch.float32).unsqueeze(0)
+                kp_matrix = np.real(spd_grl_map(m_tensor_rl).squeeze(0).detach().numpy())
+                
+                # Clamp eigenvalues — strictly required as off-diagonals can push eigenvalues out of bounds
+                _eigvals, _eigvecs = np.linalg.eigh(kp_matrix)
+                _pre_clamp_max = float(np.max(_eigvals))
+                self._spd_pre_clamp_eigmax_history.append(_pre_clamp_max)
+                if _pre_clamp_max > self.max_kp or float(np.min(_eigvals)) < self.min_kp:
+                    self._spd_clamp_violations += 1
+                _eigvals = np.clip(_eigvals, self.min_kp, self.max_kp)
+                kp_matrix = _eigvecs @ np.diag(_eigvals) @ _eigvecs.T
 
             kp_rot_raw = action[6:9]
             kp_rot_scaled = self.min_kp + 0.5 * (kp_rot_raw + 1.0) * (self.max_kp - self.min_kp)
@@ -440,11 +500,15 @@ class GeometricWrapper(gym.Wrapper):
             kp_matrix_3x3 = kp_matrix
         elif self.use_diag_manifold:
             kp_raw = action[:6].copy()
-            log_min, log_max = np.log(self.min_kp), np.log(self.max_kp)
 
-            # Linearly map [-1, 1] to logarithmic space, then exponentiate
-            log_kp = log_min + 0.5 * (kp_raw + 1.0) * (log_max - log_min)
-            kp_scaled = np.exp(log_kp)  # 6-dim physical kp (3 trans + 3 rot)
+            # kp_trans[:3] — linear-space decoding (matches _kp_trans_to_norm_linear in planner).
+            # Fixes the limp initialization caused by log-space!
+            kp_trans_scaled = self.min_kp + 0.5 * (kp_raw[:3] + 1.0) * (self.max_kp - self.min_kp)
+
+            # kp_rot[3:6] — linear-space decoding (matches _kp_rot_to_norm in planner).
+            kp_rot_scaled = self.min_kp + 0.5 * (kp_raw[3:6] + 1.0) * (self.max_kp - self.min_kp)
+
+            kp_scaled = np.concatenate([kp_trans_scaled, kp_rot_scaled])
 
             if self.task_type == 'nutassembly':
                 kin_raw = action[-6:]
@@ -615,9 +679,16 @@ class GeometricWrapper(gym.Wrapper):
         # Early termination on success: Robosuite's horizon-based
         # 'done' doesn't fire until horizon end, but we want to end the episode
         # immediately upon task completion so the agent doesn't receive confusing post-success steps.
+        # A success_bonus compensates for the dense-reward steps discarded by early termination,
+        # preventing the critic from systematically undervaluing success states relative to the
+        # exploration-trap dense reward. Applied uniformly to all binary-success envs (Door, NAS).
         if not terminated:
-            if bool(self.gym_env._check_success()):
-                terminated = True
+            try:
+                if bool(self.env.unwrapped._check_success()):
+                    terminated = True
+                    reward += self.success_bonus
+            except AttributeError:
+                pass
 
         flat_obs = self._flatten_obs(obs)
 
@@ -690,6 +761,8 @@ class GeometricWrapper(gym.Wrapper):
         off_diag_mask = ~np.eye(3, dtype=bool)
         coupling_magnitude = np.linalg.norm(safe_kp[off_diag_mask])
         self.coupling_history.append(coupling_magnitude)
+        # Track per-step max |off-diagonal| element separately for peak detection
+        self._spd_coupling_max_history.append(float(np.max(np.abs(safe_kp[off_diag_mask]))))
 
         self.prev_Kp = safe_kp.copy()
 
@@ -719,7 +792,7 @@ class GeometricWrapper(gym.Wrapper):
             # Log the effective (schedule-adjusted) prior weight, not just the nominal
             info["llm/prior_confidence"] = self.llm_planner._compute_effective_w()
 
-        raw_success = self.gym_env._check_success()
+        raw_success = self.env.unwrapped._check_success()
         info["is_success"] = bool(raw_success)
 
         if self.is_eval:
@@ -765,6 +838,11 @@ class GeometricWrapper(gym.Wrapper):
             info['smoothness/max_ang_accel'] = np.max(self.ang_accel_history) if self.ang_accel_history else 0
             info['smoothness/std_force'] = np.std(self.force_history) if self.force_history else 0
             info["smoothness/avg_force"] = np.mean(self.force_history) if self.force_history else 0
+            # SPD explosion diagnostics (pre-clamp) — non-zero values confirm eigenvalue explosions
+            info['smoothness/spd_pre_clamp_eigmax_avg'] = np.mean(self._spd_pre_clamp_eigmax_history) if self._spd_pre_clamp_eigmax_history else 0
+            info['smoothness/spd_pre_clamp_eigmax_peak'] = np.max(self._spd_pre_clamp_eigmax_history) if self._spd_pre_clamp_eigmax_history else 0
+            info['smoothness/spd_clamp_violations'] = self._spd_clamp_violations
+            info['smoothness/spd_max_offdiag_peak'] = np.max(self._spd_coupling_max_history) if self._spd_coupling_max_history else 0
             # Safety: excessive force and contact engagement
             info["safety/force_exceedance_count"] = self.force_exceedances
             info["safety/force_exceedance_rate"] = self.force_exceedances / max(1, self.episode_steps)
@@ -817,7 +895,7 @@ class GeometricWrapper(gym.Wrapper):
                             pass
             
     def check_joint_violations(self):
-        robot = self.gym_env.robots[0]
+        robot = self.env.unwrapped.robots[0]
 
         # Check Safety (Joint Limits)
         try:
@@ -829,7 +907,7 @@ class GeometricWrapper(gym.Wrapper):
 
     def log_contact_forces(self):
         FORCE_THRESHOLD = 50.0  # N — aligned with Wipe env's pressure_threshold_max (60N)
-        robot = self.gym_env.robots[0]
+        robot = self.env.unwrapped.robots[0]
         try:
             ee_force = max([
                 np.linalg.norm(np.array(robot.recent_ee_forcetorques[arm].current[:3]))

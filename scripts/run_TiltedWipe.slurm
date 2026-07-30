@@ -46,27 +46,26 @@ export MALLOC_ARENA_MAX=1
 
 # ── Fixed hypers ──────────────────────────────────────────────────────────────
 TASK="TiltedWipe"
-STEPS=1200000
+STEPS=2000000
 HORIZON=150
 N_ENVS=8
-GAMMA=0.95
-# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+# GAMMA=0.95
+GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
 NUM_MARKERS=50
-SEEDS=(1 2 3)
+SEEDS=(0 1 2 3 4 5 6 7 8 9)
 LR=3e-4
 
 # ── LLM prior schedule ────────────────────────────────────────────────────────
-# Anneal from W_INIT → W_FLOOR over the first 75% of per-env steps.
-# Per-env steps ≈ STEPS / N_ENVS = 125,000. 75% of that = 93,750.
-LLM_W_INIT=0.5
-LLM_W_FLOOR=0.05
-LLM_ANNEAL=$((STEPS * 25 / 100 / N_ENVS))   # = 31,250
+# Anneal from W_INIT → W_FLOOR over the first 50% of per-env steps.
+LLM_W_INIT=0.6
+LLM_W_FLOOR=0.0
+LLM_ANNEAL=$((STEPS * 50 / 100 / N_ENVS))   # anneal over 50% of per-env steps
 LLM_BACKEND="ollama"
 LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=50
 
 wait_for_queue() {
-    while [ $(jobs -pr | wc -l) -ge 9 ]; do
+    while [ $(jobs -pr | wc -l) -ge 11 ]; do
         sleep 10
     done
 }
@@ -169,54 +168,54 @@ run_llm() {
     echo "  ✅ Done: ${EXP_NAME} SEED=${SEED}"
 }
 
-echo "Starting Ollama server on port ${UNIQUE_PORT}..."
-~/.local/bin/ollama serve &
-sleep 10
+# echo "Starting Ollama server on port ${UNIQUE_PORT}..."
+# ~/.local/bin/ollama serve &
+# sleep 10
 
-echo ""
-echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
-if ! check_ollama; then
-    echo "❌ Ollama not responding. Aborting."
-    exit 1
-fi
-echo "✅ Ollama OK — proceeding."
-echo "$OLLAMA_RESPONSE" | grep -o '"response":"[^"]*"'
-echo ""
+# echo ""
+# echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
+# if ! check_ollama; then
+#     echo "❌ Ollama not responding. Aborting."
+#     exit 1
+# fi
+# echo "✅ Ollama OK — proceeding."
+# echo "$OLLAMA_RESPONSE" | grep -o '"response":"[^"]*"'
+# echo ""
 
 for SEED in "${SEEDS[@]}"; do
     echo "════════════════  SEED ${SEED}  ════════════════"
 
-    # # 1. BASELINE — diagonal variable_kp, Euclidean obs
-    # wait_for_queue
-    # run_geo "FALSE" "FALSE" "FALSE" "BASELINE_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-
-    # # 2. DIAG — diagonal SPD (log-scale exponential map)
-    # wait_for_queue
-    # run_geo "FALSE" "FALSE" "TRUE"  "DIAG_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-
-    # # 3. SPD_ONLY — full 3×3 SPD manifold
-    # wait_for_queue
-    # run_geo "TRUE"  "FALSE" "FALSE" "SPD_ONLY_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-
-    # # 4. LIE_ONLY — SO(3) Lie-group observation only
-    # wait_for_queue
-    # run_geo "FALSE" "TRUE"  "FALSE" "LIE_ONLY_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-
-    # # 5. FULL_GRL — full SPD + SO(3) Lie-group observation
-    # wait_for_queue
-    # run_geo "TRUE"  "TRUE"  "FALSE" "FULL_GRL_FINAL_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-
-    # 6. BASELINE with LLM
+    # 1. BASELINE — diagonal variable_kp, Euclidean obs
     wait_for_queue
-    run_llm "FALSE"  "FALSE" "BASELINE_FINAL_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "FALSE" "WIPE_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
-    # 7. SPD with LLM
+    # 2. DIAG — diagonal SPD (log-scale exponential map)
     wait_for_queue
-    run_llm "TRUE"  "FALSE" "SPD_ONLY_FINAL_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_geo "FALSE" "FALSE" "TRUE"  "WIPE_DIAG_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
 
-    # 9. FULL_GRL + LLM
+    # 3. SPD_ONLY — full 3×3 SPD manifold
     wait_for_queue
-    run_llm "TRUE"  "TRUE"  "FULL_GRL_FINAL_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "FALSE" "FALSE" "WIPE_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    # 4. LIE_ONLY — SO(3) Lie-group observation only
+    # wait_for_queue
+    # run_geo "FALSE" "TRUE"  "FALSE" "WIPE_LIE_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    # 5. FULL_GRL — full SPD + SO(3) Lie-group observation
+    wait_for_queue
+    run_geo "TRUE"  "TRUE"  "FALSE" "WIPE_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+
+    # # 6. BASELINE with LLM
+    wait_for_queue
+    run_llm "FALSE"  "FALSE" "WIPE_BASELINE_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+
+    # # 7. SPD with LLM
+    wait_for_queue
+    run_llm "TRUE"  "FALSE" "WIPE_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+
+    # # 9. FULL_GRL + LLM
+    # wait_for_queue
+    # run_llm "TRUE"  "TRUE"  "WIPE_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
 
 done
 

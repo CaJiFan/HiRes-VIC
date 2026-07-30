@@ -1,0 +1,66 @@
+task: TiltedWipe (Robosuite)
+robot: 7-DOF Panda arm with a flat wiping tool rigidly attached to the EEF
+description: >
+  The Panda arm must use the wiping tool to clear N dirt markers from a table
+  surface that is tilted 45° around the world Y-axis. The robot starts ~30 cm
+  above the table centre (teleport init) and must descend to contact, then sweep
+  across all marker clusters to achieve full coverage. The tilt prevents trivial
+  hovering: the robot must maintain sustained downward-and-lateral contact force
+  throughout. Surface normal in world frame: [0.707, 0, 0.707] — compliance
+  perpendicular to the surface requires equal softness in world-X and world-Z.
+
+phases:
+  approach:
+    # EEF is in free space, descending toward the table. Contact flag is False.
+    # Moderate isotropic compliance to control descent speed without hard impact.
+    # No need to differentiate axes — the robot is not yet in contact.
+    kp_trans: [50.0, 50.0, 50.0]
+    kp_rot:   [50.0, 50.0, 50.0]
+    description: >
+      Free-space descent toward the tilted table. Moderate isotropic compliance
+      prevents hard impact on first contact while maintaining controlled approach.
+
+  transition:
+    # EEF has just touched the table (contact flag flips True).
+    # The surface normal is [0.707, 0, 0.707] — soften X AND Z equally to absorb
+    # the impact along the true contact normal. Stiffen world-Y (lateral stroke
+    # direction) to begin establishing positional authority for the wipe stroke.
+    kp_trans: [10.0, 100.0, 10.0]
+    kp_rot:   [30.0, 30.0,  30.0]
+    description: >
+      Initial surface contact. Equal compliance in world-X and world-Z absorbs
+      impact along the 45°-tilted surface normal [0.707, 0, 0.707]. High world-Y
+      stiffness begins positional authority for the lateral wiping stroke.
+
+  wipe:
+    # EEF is in sustained contact, actively sweeping across markers.
+    # Maintain high world-Y stiffness to drive the stroke with authority.
+    # Keep X and Z compliant so the tool conforms to the tilted surface and
+    # contact pressure stays below the force penalty threshold throughout.
+    kp_trans: [10.0, 110.0, 10.0]
+    kp_rot:   [30.0, 30.0,  30.0]
+    description: >
+      Active wiping stroke. Slightly higher world-Y stiffness than transition
+      for full stroke authority. X and Z remain compliant to maintain gentle,
+      consistent contact pressure along the tilted surface normal.
+
+planner_prompt: |
+  You are an impedance control expert for a robot wiping task in Robosuite.
+
+  The Panda arm uses a wiping tool to clear dirt markers from a table tilted 45°
+  around the world Y-axis. The surface normal is [0.707, 0, 0.707] in world frame.
+  Translational stiffness is a diagonal 3x3 matrix [Kx, Ky, Kz] in world axes.
+
+  Available impedance phases:
+    approach    – EEF is in free space, contact flag is False, descending toward table.
+                  Use when the robot has not yet touched the surface.
+    transition  – EEF has just made contact (contact flag just flipped True).
+                  Use on first contact to absorb the impact and initiate the wipe stroke.
+    wipe        – EEF is in sustained contact and actively sweeping across markers.
+                  Use when contact is True and the wipe stroke is ongoing.
+
+  You will receive: EEF position (xyz), surface contact flag (True/False),
+  wipe completion fraction (0.0–1.0), distance to wipe centroid.
+  Respond with ONLY the exact phase name: approach | transition | wipe.
+  No explanation, no punctuation — just the phase name.
+

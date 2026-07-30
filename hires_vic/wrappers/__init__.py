@@ -3,3 +3,4 @@ from .wipe_metric import WipeMetricWrapper
 from .geometric import GeometricWrapper
 from .fixed_gripper import FixedGripperWrapper
 from .pih_curriculum import RobosuiteTeleportWrapper, ManiskillTeleportWrapper
+from .wipe_teleport import WipeTeleportWrapper, WipeDomainRandomizationWrapper

@@ -188,6 +188,7 @@ class LLMImpedancePlanner:
         # ── Prior-weight schedule ──────────────────────────────────────────
         anneal_steps: int = 0,
         anneal_floor: float = 0.05,
+        anneal_schedule: str = "linear",
         transition_boost_mult: float = 1.5,
         transition_boost_steps: int = 10,
         n_stable_reduce: int = 20,
@@ -201,6 +202,7 @@ class LLMImpedancePlanner:
         # ── Schedule params ────────────────────────────────────────────────
         self.anneal_steps = anneal_steps
         self.anneal_floor = anneal_floor   # w never drops below this value
+        self.anneal_schedule = anneal_schedule  # "linear" or "cosine"
         self.transition_boost_mult = transition_boost_mult
         self.transition_boost_steps_duration = transition_boost_steps
         self.n_stable_reduce = n_stable_reduce
@@ -259,36 +261,47 @@ class LLMImpedancePlanner:
         Applies annealing (with floor), phase-transition boost, and stability
         reduction in order. The result is always clipped to [0, 1].
 
-        Schedule visualized (anneal_steps=T, floor=w_min):
+        Schedules (anneal_steps=T, floor=w_min):
 
-          prior_weight ┤━╮
-                       │  ╲
-            anneal_floor┤──╰━━━━━━━━━━  (never drops below floor)
-                        0              T
+          linear:  prior_weight ┤━╮
+                                │  ╲
+                   anneal_floor ┤──╰━━━━━━━━━━  (stays at floor after T)
+                                0              T
+
+          cosine:  prior_weight ┤━╮
+                                │  ╰╮
+                                │    ╰─╮
+                   anneal_floor ┤─────╰━  (smooth S-curve, reaches floor at T)
+                                0        T
         """
+        import math
         w = float(self.prior_weight)
 
-        # 1. Linear annealing with floor
-        #    w decays from prior_weight → anneal_floor over anneal_steps.
-        #    After anneal_steps it stays at anneal_floor (never 0 by default).
-        #    Set anneal_floor=0.0 to fully anneal to zero.
+        # 1. Annealing with floor — linear or cosine schedule
         if self.anneal_steps > 0:
-            anneal_factor = max(0.0, 1.0 - self._global_step / self.anneal_steps)
+            t = self._global_step
+            T = self.anneal_steps
+            if self.anneal_schedule == "cosine":
+                # Cosine annealing: slow start, fast middle, slow end.
+                # Reaches anneal_floor exactly at t=T; clamps at floor after.
+                progress = min(1.0, t / T)
+                anneal_factor = 0.5 * (1.0 + math.cos(math.pi * progress))
+            else:
+                # Linear (default)
+                anneal_factor = max(0.0, 1.0 - t / T)
             # Interpolate between floor and prior_weight
             w = self.anneal_floor + (w - self.anneal_floor) * anneal_factor
 
-        # 2. Phase-transition boost (takes priority over stability reduction)
-        if self._transition_boost_remaining > 0:
-            w = min(1.0, w * self.transition_boost_mult)
-            self._transition_boost_remaining -= 1
+        # 2. Phase-transition boost
+        # if self._transition_boost_remaining > 0:
+        #     w = min(1.0, w * self.transition_boost_mult)
+        #     self._transition_boost_remaining -= 1
 
-        # 3. Stability reduction (only when not in transition boost)
-        elif self._consecutive_same_phase > self.n_stable_reduce:
-            excess = self._consecutive_same_phase - self.n_stable_reduce
-            # Linear reduction: each additional stable step drops w by 0.5%,
-            # floored at 50% of current w (not below anneal_floor).
-            reduction = max(0.5, 1.0 - 0.005 * excess)
-            w = max(self.anneal_floor, w * reduction)
+        # 3. Stability reduction
+        # elif self._consecutive_same_phase > self.n_stable_reduce:
+        #     excess = self._consecutive_same_phase - self.n_stable_reduce
+        #     reduction = max(0.5, 1.0 - 0.005 * excess)
+        #     w = max(self.anneal_floor, w * reduction)
 
         return float(np.clip(w, 0.0, 1.0))
 
@@ -454,6 +467,9 @@ class LLMImpedancePlanner:
 
         contact = bool(obs_dict.get("robot0_contact", obs_dict.get("is_contact", False)))
         lines.append(f"In contact: {contact}")
+
+        if self._prev_returned_mode:
+            lines.append(f"Previously selected phase: {self._prev_returned_mode}")
 
         if "proportion_wiped" in obs_dict:
             pw = float(obs_dict["proportion_wiped"])

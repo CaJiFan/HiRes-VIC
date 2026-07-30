@@ -115,17 +115,17 @@ def main():
     pos_base, K_base = collect_trajectory(args.baseline_path, args.env, "BASELINE")
     
     print(f"Running SPD/GRL policy ({args.spd_path})...")
-    pos_spd, K_spd = collect_trajectory(args.spd_path, args.env, "FULL_GRL")
+    pos_spd, K_spd = collect_trajectory(args.spd_path, args.env, "SPD_ONLY")
 
     # Plotting side by side
     fig = plt.figure(figsize=(14, 7))
     
     for idx, (title, pos, K_mats, color) in enumerate([
         ("Standard RL (Baseline)", pos_base, K_base, 'r'),
-        ("Manifold-Aware RL (FULL_GRL)", pos_spd, K_spd, 'g')
+        ("Manifold-Aware RL (SPD-Only)", pos_spd, K_spd, 'g')
     ]):
         ax = fig.add_subplot(1, 2, idx + 1, projection='3d')
-        ax.set_title(title)
+        # Title removed — set in manuscript caption instead
         
         # Plot trajectory line
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], color='k', linewidth=1.5, label='Trajectory')

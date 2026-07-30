@@ -25,7 +25,13 @@ import robosuite as suite
 from robosuite.wrappers import GymWrapper
 from robosuite import load_composite_controller_config
 from hires_vic import envs
-from hires_vic.wrappers import GeometricWrapper, FixedGripperWrapper, RobosuiteTeleportWrapper
+from hires_vic.wrappers import (
+    GeometricWrapper,
+    FixedGripperWrapper,
+    RobosuiteTeleportWrapper,
+    WipeTeleportWrapper,
+    WipeDomainRandomizationWrapper,
+)
 from hires_vic.envs.riemannian_controller import RiemannianController
 import robosuite.controllers.parts.controller_factory as factory
 factory.arm_controllers.OperationalSpaceController = RiemannianController
@@ -228,6 +234,10 @@ def parse_args():
     parser.add_argument("--llm_anneal_floor", type=float, default=0.05,
                    help="Minimum prior weight after annealing (default 0.05). "
                         "Set to 0.0 to anneal completely to zero.")
+    parser.add_argument("--llm_anneal_schedule", type=str, default="linear",
+                   choices=["linear", "cosine"],
+                   help="Annealing schedule for LLM prior weight: 'linear' (default) or "
+                        "'cosine' (slow start, fast middle, slow end — prevents collapse).")
     parser.add_argument("--llm_model",          default="llama3.2")
     parser.add_argument("--llm_profile",        default="configs/nutassembly_robosuite_impedance_profile.yaml",
                    help="Path to YAML impedance profile for this task")
@@ -253,8 +263,19 @@ def parse_args():
     parser.add_argument("--primitive_init", type=str, default="none",
                         choices=["none", "teleport", "scripted", "both"],
                         help="Initialize episodes with a motion primitive: 'teleport', 'scripted', 'both', or 'none'.")
+    parser.add_argument("--use_domain_rand", action="store_true",
+                        help="Enable domain randomization for TiltedWipe (tilt angle ±7°, table size 70-100%%).")
     parser.add_argument("--quat_debug", action="store_true",
                         help="Print quaternion diagnostic candidates for nut handle orientation.")
+    parser.add_argument("--gamma_start", type=float, default=None,
+                        help="If set, enables gamma curriculum: starts at gamma_start and linearly anneals "
+                             "to --gamma over the first 50%% of training, then holds at --gamma. "
+                             "E.g. --gamma_start 0.95 --gamma 0.9933. "
+                             "Prevents the end-of-episode 'give-up' behaviour seen with low gamma "
+                             "while avoiding Q-function overestimation spikes from hard gamma jumps.")
+    parser.add_argument("--batch_size", type=int, default=512,
+                        help="Batch size for SAC. Defaults to 512, but 1024 is recommended for stability "
+                             "when using high gamma and dense rewards.")
     
     # Logging Args
     parser.add_argument("--run_name", type=str, required=True, help="Name of the run for logging/saving")
@@ -333,6 +354,19 @@ def make_video_env(args):
     except Exception as e:
         print('Exception setting up primitive', e)
         pass
+
+    # ── Wipe-specific wrappers ────────────────────────────────────────────
+    if 'wipe' in env_lower:
+        if getattr(args, 'use_domain_rand', False):
+            env = WipeDomainRandomizationWrapper(
+                env,
+                tilt_min_deg=38.0,
+                tilt_max_deg=52.0,
+                size_scale_min=0.7,
+                randomize_friction=False,
+            )
+        if getattr(args, 'primitive_init', 'none') in ('teleport', 'both'):
+            env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.30)
     
     # ✅ Auto-select profile: VLM overrides, then env-specific defaults
     llm_profile_path = args.llm_profile
@@ -344,13 +378,26 @@ def make_video_env(args):
             llm_profile_path = "configs/door_impedance_profile.yaml"
         elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
             # Auto-select Wipe profile when user hasn't explicitly overridden --llm_profile
-            llm_profile_path = "configs/wipe_impedance_profile.yaml"
+            llm_profile_path = "configs/wipe_impedance_profile_v2.yaml"
     
-    stiffness_penalty = 0.002 if task_type == 'wipe' else 0.01
+    
+    if task_type == 'wipe':
+        stiffness_penalty = 0.002
+        success_bonus = 0.0      # Wipe uses continuous % reward, no binary ET
+    elif task_type == 'nutassembly':
+        stiffness_penalty = 0.01
+        success_bonus = 0.0      # Removed per PI recommendation (was 5.0)
+    elif task_type == 'door':
+        stiffness_penalty = 0.001
+        success_bonus = 0.0      # Removed per PI recommendation (was 5.0)
+    else:
+        stiffness_penalty = 0.0
+        success_bonus = 0.0
 
     env = GeometricWrapper(
         env=env,
         stiffness_penalty=stiffness_penalty,
+        success_bonus=success_bonus,
         use_spd_manifold=args.use_spd,
         use_lie_group=args.use_lie,
         use_diag_manifold=args.use_diag,
@@ -363,6 +410,8 @@ def make_video_env(args):
         llm_prior_weight=args.llm_prior_weight,
         llm_profile_path=llm_profile_path if args.use_llm_prior else None,
         llm_anneal_steps=getattr(args, 'llm_anneal_steps', 0),
+        llm_anneal_floor=getattr(args, 'llm_anneal_floor', 0.05),
+        llm_anneal_schedule=getattr(args, 'llm_anneal_schedule', 'linear'),
         task_type=task_type,
         task_metrics_fn=task_metrics,
         use_vision=args.use_vlm,
@@ -436,7 +485,7 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         
         env = GymWrapper(env)
 
-        # for the NutAssembly envs 
+        # for the NutAssembly envs
         try:
             # if getattr(args, 'primitive_init', 'none') in ('scripted', 'both') and ('nutassembly' in env_lower or 'peg' in env_lower):
             #     env = RobosuiteScriptedPrimitiveWrapper(env, setup_steps=90, is_eval=is_eval)
@@ -446,6 +495,19 @@ def make_env(args, is_eval=False, rank=0, seed=0):
         except Exception as e:
             print(f"Error occurred while initializing primitive wrapper: {e}")
             pass
+
+        # ── Wipe-specific wrappers ────────────────────────────────────────
+        if 'wipe' in env_lower:
+            if getattr(args, 'use_domain_rand', False):
+                env = WipeDomainRandomizationWrapper(
+                    env,
+                    tilt_min_deg=38.0,
+                    tilt_max_deg=52.0,
+                    size_scale_min=0.7,
+                    randomize_friction=False,
+                )
+            if getattr(args, 'primitive_init', 'none') in ('teleport', 'both'):
+                env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.30)
         
         # ✅ Auto-select profile: VLM overrides, then env-specific defaults
         llm_profile_path = args.llm_profile
@@ -454,13 +516,28 @@ def make_env(args, is_eval=False, rank=0, seed=0):
                 llm_profile_path = "configs/nutassembly_vlm_impedance_profile.yaml"
             elif 'door' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
                 llm_profile_path = "configs/door_impedance_profile.yaml"
-        
-        stiffness_penalty = 0.002 if task_type == 'wipe' else 0.01
-        print(f'Using stiffness penalty of {stiffness_penalty}')
+            elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
+                # Auto-select Wipe profile (was missing here — caused NAS profile to be used in eval!)
+                llm_profile_path = "configs/wipe_impedance_profile_v2.yaml"
+
+        if task_type == 'wipe':
+            stiffness_penalty = 0.002
+            success_bonus = 0.0      # Wipe uses continuous % reward, no binary ET
+        elif task_type == 'nutassembly':
+            stiffness_penalty = 0.01
+            success_bonus = 0.0      # Removed per PI recommendation (was 5.0)
+        elif task_type == 'door':
+            stiffness_penalty = 0.001
+            success_bonus = 0.0      # Removed per PI recommendation (was 5.0)
+        else:
+            stiffness_penalty = 0.0
+            success_bonus = 0.0
+        print(f'Using stiffness penalty of {stiffness_penalty}, success bonus of {success_bonus}')
 
         env = GeometricWrapper(
             env=env,
             stiffness_penalty=stiffness_penalty,
+            success_bonus=success_bonus,
             use_spd_manifold=args.use_spd,
             use_lie_group=args.use_lie,
             use_diag_manifold=args.use_diag,
@@ -474,12 +551,26 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             llm_profile_path=llm_profile_path if args.use_llm_prior else None,
             llm_anneal_steps=getattr(args, 'llm_anneal_steps', 0),
             llm_anneal_floor=getattr(args, 'llm_anneal_floor', 0.05),
+            llm_anneal_schedule=getattr(args, 'llm_anneal_schedule', 'linear'),
             task_type=task_type,
             task_metrics_fn=task_metrics,
             use_vision=args.use_vlm,
         )
 
-        # env.reset(seed=seed + rank)
+        # ── Seeding ──────────────────────────────────────────────────────────
+        # NOTE: Do NOT call env.reset(seed=...) here.
+        # SubprocVecEnv already calls reset() internally during __init__, so
+        # an explicit reset() here would trigger a second full episode setup
+        # (e.g. the 90-step teleport sequence for NutAssembly), doubling frames
+        # in rollout videos and wasting wall time.
+        #
+        # Instead, we store the seed on the GeometricWrapper so it is applied
+        # the next time reset() is naturally called by SB3 (which is the one
+        # SubprocVecEnv already triggers during __init__ or between episodes).
+        # GeometricWrapper.reset() already calls np.random.seed(seed) when
+        # self._pending_seed is set (see geometric.py).
+        if hasattr(env, '_pending_seed'):
+            env._pending_seed = seed + rank  # GeometricWrapper picks this up on next reset()
         env.action_space.seed(seed + rank)
         env.observation_space.seed(seed + rank)
         np.random.seed(seed + rank)
@@ -507,7 +598,27 @@ class SyncEvalCallback(EvalCallback):
         except Exception as e:
             print(f"Warning: Failed to sync eval LLM step: {e}")
             
-        return super()._on_step()
+        # 1. Let the parent class run the evaluation and (optionally) save the reward-based best model
+        result = super()._on_step()
+
+        # 2. Add our own logic to track and save the best success-rate model
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            if len(self.evaluations_successes) > 0 and len(self.evaluations_successes[-1]) > 0:
+                current_success_rate = np.mean(self.evaluations_successes[-1])
+                
+                if not hasattr(self, 'best_success_rate'):
+                    self.best_success_rate = -np.inf
+                
+                if current_success_rate > self.best_success_rate:
+                    self.best_success_rate = current_success_rate
+                    if self.verbose > 0:
+                        print(f"New best success rate: {current_success_rate:.2f}! Saving to best_success_model.zip")
+                    
+                    import os
+                    save_path = os.path.join(self.best_model_save_path, "best_success_model")
+                    self.model.save(save_path)
+
+        return result
 
 def setup_evaluation_callback(args, run_name):
     # Evaluation 
@@ -517,6 +628,7 @@ def setup_evaluation_callback(args, run_name):
     
     # Evaluate every ~10% of total training budget, but at least every 50k env steps
     eval_freq_steps = max(args.total_timesteps // (args.n_envs * 10), 50_000 // args.n_envs)
+    # eval_freq_steps = 1000
     
     eval_callback = SyncEvalCallback(
         eval_env,
@@ -532,13 +644,26 @@ def setup_evaluation_callback(args, run_name):
 
 def main():
     args = parse_args()
+    
+    # ✅ Global Auto-select profile: VLM overrides, then env-specific defaults
+    # This ensures the callback, WandB, and envs all use the exact same profile.
+    if args.use_llm_prior:
+        env_lower = args.env.lower()
+        if args.use_vlm:
+            args.llm_profile = "configs/nutassembly_vlm_impedance_profile.yaml"
+        elif 'door' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
+            args.llm_profile = "configs/door_impedance_profile.yaml"
+        elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
+            args.llm_profile = "configs/wipe_impedance_profile_v2.yaml"
+
     set_random_seed(args.seed)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Training on {device.upper()} with {args.n_envs} parallel environments.")
     print(f"🚀 Starting training for {args.env} with SEED: {args.seed} and gamma: {args.gamma}")
 
-    wandb_run_name = f'{args.algorithm}_{args.env.upper()}_{args.run_name}' 
+    # wandb_run_name = f'{args.algorithm}_{args.env.upper()}_{args.run_name}' 
+    wandb_run_name = f'{args.algorithm}_{args.run_name}' 
     run_name = f'{wandb_run_name}_SEED_{args.seed}'
     
     run = wandb.init(
@@ -560,18 +685,30 @@ def main():
         verbose=1,
         tensorboard_log=f"./outputs/logs/{run_name}",
         learning_rate=args.lr,
-        batch_size=512,
+        batch_size=args.batch_size,
         buffer_size=1_000_000,
         tau=0.002,                  # For soft updates of the target network
         target_entropy="auto",      # Encourage exploration (tune based on action space)
         gamma=args.gamma,           # default 0.99
         train_freq=1,               # Train every step
-        gradient_steps=args.n_envs, # Take 4 gradient steps to match 4 new data points
+        gradient_steps=args.n_envs, # 1 update per new sample (matches n_envs parallel envs)
         use_sde=False,              # Smooth robotic noise
         # sde_sample_freq=8,
         seed=args.seed,
         device=device
     )
+
+    # ── Gradient clipping hooks ──────────────────────────────────────────────
+    # The SPD/GRL manifold mapping (matrix exponential) can produce large
+    # gradient magnitudes during Q-overestimation events late in training,
+    # causing catastrophic policy collapse. Element-wise clamping to ±1.0
+    # prevents these spikes from corrupting the weights without slowing
+    # learning (unlike reducing gradient_steps or LR).
+    # Applied to all configs for consistency — Euclidean runs also benefit.
+    # _GRAD_CLIP = 1.0
+    # for param in model.policy.parameters():
+    #     if param.requires_grad:
+            # param.register_hook(lambda g: torch.clamp(g, -_GRAD_CLIP, _GRAD_CLIP))
 
     eval_callback = setup_evaluation_callback(args, run_name)
     
@@ -579,12 +716,10 @@ def main():
     if args.use_llm_prior:
         try:
             import yaml
-            # ✅ Use VLM profile if VLM is enabled
-            profile_to_load = "configs/nutassembly_vlm_impedance_profile.yaml" if args.use_vlm else args.llm_profile
-            with open(profile_to_load, 'r') as f:
+            with open(args.llm_profile, 'r') as f:
                 profile = yaml.safe_load(f)
                 modes = list(profile.get("phases", {}).keys())
-                print(f"Loaded LLM impedance profile from {profile_to_load} with modes: {modes}")
+                print(f"Loaded LLM impedance profile for logging from {args.llm_profile} with modes: {modes}")
         except Exception as e:
             print(f"Failed to load LLM profile for logging callback: {e}")
     logging_callback = RobosuiteLoggingCallback(modes=modes)
@@ -606,11 +741,26 @@ def main():
         except Exception as e:
             print(f"Failed to create video env: {e}")
 
+    from hires_vic.utils.callbacks import GammaCurriculumCallback
+    gamma_callback = None
+    if getattr(args, 'gamma_start', None) is not None:
+        anneal_end = args.total_timesteps // 2   # reach gamma_end by 50% of training
+        gamma_callback = GammaCurriculumCallback(
+            gamma_start=args.gamma_start,
+            gamma_end=args.gamma,
+            anneal_start_steps=0,
+            anneal_end_steps=anneal_end,
+            verbose=1,
+        )
+        print(f"Γ Gamma curriculum: {args.gamma_start} → {args.gamma} over {anneal_end:,} steps")
+
     # 6. Train!
     print(f"Starting training for {args.total_timesteps} steps...")
     callbacks = [logging_callback, eval_callback, wandb_callback]
     if video_callback is not None:
         callbacks.append(video_callback)
+    if gamma_callback is not None:
+        callbacks.append(gamma_callback)
 
     model.learn(
         total_timesteps=args.total_timesteps,
