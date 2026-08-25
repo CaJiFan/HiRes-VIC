@@ -23,6 +23,7 @@ class GeometricWrapper(gym.Wrapper):
         success_bonus=0.0,
         force_penalty=0.0,
         terminate_on_unsafe=False,
+        use_ema=False,
         use_llm_prior=False,
         llm_backend="ollama",
         llm_model="llama3.2",
@@ -35,6 +36,17 @@ class GeometricWrapper(gym.Wrapper):
         task_type=None,
         task_metrics_fn=None,
         use_vision=False,
+        early_terminate_on_success=False, # If False, runs until horizon so open-door/peg-insert rewards accumulate
+        add_prior_obs=False,          # If True, append [prior_actions, w] to obs for ALL configs
+        use_quality_reward=False,     # Use checkpoint-gated quality reward (arXiv:2502.12599 adaptation)
+        use_sequential_waypoints=True,# Enforce sequential 0->1->2->3->4 waypoint guidance (matches arXiv:2502.12599)
+        quality_f_target=15.0,        # Target normal force in Newtons for the Gaussian reward
+        quality_sigma=15.0,           # Std-dev (N) of the force quality Gaussian
+        quality_r_checkpoint=0.08,    # Checkpoint radius (m): how close to a marker to earn quality reward
+        quality_w_con=1.5,            # Weight for checkpoint-gated contact reward
+        quality_w_force=2.0,          # Weight for force quality Gaussian reward
+        quality_w_guide=1.5,          # Weight for nearest-marker guidance reward (larger scale than checkpoint)
+        quality_guide_scale=0.35,     # Length scale (m) for r_guide — must be >> r_checkpoint so gradient exists from hover height
     ):
         super().__init__(env)
 
@@ -46,9 +58,24 @@ class GeometricWrapper(gym.Wrapper):
         self.use_fixed = use_fixed
         self.stiffness_penalty = stiffness_penalty
         self.success_bonus = success_bonus
+        self.early_terminate_on_success = early_terminate_on_success
         self.force_penalty = force_penalty
         self.terminate_on_unsafe = terminate_on_unsafe
+        self.use_ema = use_ema
         self.is_eval = is_eval
+        self.add_prior_obs = add_prior_obs  # Whether to append [prior, w] to obs
+        self.use_vision = use_vision
+
+        # --- QUALITY REWARD (arXiv:2502.12599 adaptation) ---
+        self.use_quality_reward = use_quality_reward
+        self.use_sequential_waypoints = use_sequential_waypoints
+        self.quality_f_target = quality_f_target
+        self.quality_sigma = quality_sigma
+        self.quality_r_checkpoint = quality_r_checkpoint
+        self.quality_w_con = quality_w_con
+        self.quality_w_force = quality_w_force
+        self.quality_w_guide = quality_w_guide
+        self.quality_guide_scale = quality_guide_scale
 
         self.dt = 1/20 # Assuming 20 Hz control frequency
         self.prev_Kp = None
@@ -58,6 +85,11 @@ class GeometricWrapper(gym.Wrapper):
         self.euclidean_jerk_history = []
         self.riemannian_jerk_history = []
         self.coupling_history = []
+        
+        # Universal Stiffness EMA Filter
+        self._ema_kp_matrix = None
+        self._ema_kp_rot = None
+        self.ema_alpha = 0.15
         self.ang_accel_history = []
         self.force_history = []
         # SPD explosion diagnostics
@@ -165,8 +197,12 @@ class GeometricWrapper(gym.Wrapper):
               f"(prior_dim={self.prior_dim})")
 
         # --- TRUE RESIDUAL RL: STATE TRACKERS ---
-        
-        self.extra_obs_dim = self.prior_dim + 1 # +1 for the confidence weight 'w'
+        # extra_obs_dim: how many extra dims to append to the flat obs.
+        # Controlled by add_prior_obs (default False).
+        # When True, [prior_actions (prior_dim), confidence_w (1)] are appended
+        # for ALL configs (LLM and non-LLM alike) to keep obs spaces consistent.
+        # Non-LLM runs will always see zeros in these dims.
+        self.extra_obs_dim = (self.prior_dim + 1) if self.add_prior_obs else 0
         
         self.current_prior = np.zeros(self.prior_dim, dtype=np.float32)
         self.current_w = 0.0
@@ -178,11 +214,64 @@ class GeometricWrapper(gym.Wrapper):
         expanded_obs_shape = (flat_obs.shape[0] + self.extra_obs_dim,)
 
         print('▶️ Base Observation space shape: ', flat_obs.shape)
-        print('▶️ Expanded Residual Observation space shape: ', expanded_obs_shape)
+        print('▶️ Expanded Observation space shape: ', expanded_obs_shape,
+              '(prior obs appended)' if self.add_prior_obs else '(no prior obs)')
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=expanded_obs_shape, dtype=np.float32
         )
+
+    def _get_active_waypoint_rel_pos(self):
+        """
+        Helper to compute the 3D relative vector from gripper EEF to the active target marker.
+        Works in both sequential and nearest mode.
+        """
+        try:
+            raw_env = self.env.unwrapped
+            raw_obs = self._last_obs_dict
+            if not raw_obs:
+                raw_obs = raw_env._get_observations()
+                
+            eef_pos = np.array(raw_obs.get('robot0_eef_pos', [0.0, 0.0, 0.0]), dtype=float)
+            wiped_markers = getattr(raw_env, 'wiped_markers', [])
+            all_markers = getattr(raw_env, 'model', None)
+            if all_markers is not None:
+                all_markers = getattr(all_markers.mujoco_arena, 'markers', [])
+            else:
+                all_markers = []
+
+            target_pos = None
+            if getattr(self, 'use_sequential_waypoints', True):
+                # Sequential mode: sort unwiped markers spatially along Y-axis
+                unwiped = []
+                for marker in all_markers:
+                    if marker in wiped_markers:
+                        continue
+                    bid = raw_env.sim.model.body_name2id(marker.root_body)
+                    pos = np.array(raw_env.sim.data.body_xpos[bid], dtype=float)
+                    unwiped.append((marker, pos))
+                if len(unwiped) > 0:
+                    unwiped.sort(key=lambda item: item[1][1])
+                    target_pos = unwiped[0][1]
+            else:
+                # Nearest mode: find closest unwiped marker
+                min_dist = np.inf
+                for marker in all_markers:
+                    if marker in wiped_markers:
+                        continue
+                    bid = raw_env.sim.model.body_name2id(marker.root_body)
+                    pos = np.array(raw_env.sim.data.body_xpos[bid], dtype=float)
+                    dist = np.linalg.norm(eef_pos - pos)
+                    if dist < min_dist:
+                        min_dist = dist
+                        target_pos = pos
+
+            if target_pos is not None:
+                return target_pos - eef_pos
+        except Exception:
+            pass
+
+        return np.zeros(3, dtype=np.float32)
 
     def _flatten_obs(self, obs):
         """
@@ -260,7 +349,124 @@ class GeometricWrapper(gym.Wrapper):
             except Exception:
                 return np.zeros((0,), dtype=np.float32)
 
+        if self.task_type == 'wipe':
+            rel_pos = self._get_active_waypoint_rel_pos()
+            if self._last_obs_dict is not None and isinstance(self._last_obs_dict, dict):
+                self._last_obs_dict['gripper_to_active_waypoint'] = rel_pos
+            if getattr(self, 'use_sequential_waypoints', False):
+                new_obs.append(rel_pos)
+
         return np.concatenate(new_obs).astype(np.float32)
+
+    def _compute_quality_reward(self) -> float:
+        """
+        Checkpoint-gated quality reward adapted from arXiv:2502.12599.
+
+        Components:
+          r_con_q   : contact reward gated by being within quality_r_checkpoint of nearest unwiped marker
+          r_force_q : Gaussian force quality reward exp(-(F_n - F_target)^2 / 2*sigma^2), also gated
+          r_guide   : smooth nearest-marker guidance reward (always on, no gating needed)
+
+        Returns:
+            float: total quality reward for this step
+        """
+        try:
+            raw_env = self.env.unwrapped
+            raw_obs = self._last_obs_dict
+
+            # ── 1. EEF position ──────────────────────────────────────────
+            eef_pos = np.array(raw_obs.get('robot0_eef_pos', [0, 0, 0]), dtype=float)
+
+            # ── 2. Determine target waypoint (Sequential vs. Nearest) ────
+            wiped_markers = getattr(raw_env, 'wiped_markers', [])
+            all_markers = getattr(raw_env, 'model', None)
+            if all_markers is not None:
+                all_markers = getattr(all_markers.mujoco_arena, 'markers', [])
+            else:
+                all_markers = []
+
+            min_dist = np.inf
+            if getattr(self, 'use_sequential_waypoints', True):
+                # Spatial Sequential Mode (arXiv:2502.12599):
+                # Sort unwiped markers spatially along Y-axis (left-to-right: -Y to +Y).
+                # This guarantees a smooth, monotonic left-to-right sweeping trajectory across the table!
+                unwiped = []
+                for marker in all_markers:
+                    if marker in wiped_markers:
+                        continue
+                    try:
+                        bid = raw_env.sim.model.body_name2id(marker.root_body)
+                        pos = np.array(raw_env.sim.data.body_xpos[bid], dtype=float)
+                        unwiped.append((marker, pos))
+                    except Exception:
+                        continue
+
+                if len(unwiped) > 0:
+                    unwiped.sort(key=lambda item: item[1][1])  # Sort by Y-coordinate
+                    active_marker, active_pos = unwiped[0]
+                    min_dist = np.linalg.norm(eef_pos - active_pos)
+            else:
+                # Nearest Mode: find closest unwiped marker among all remaining
+                for marker in all_markers:
+                    if marker in wiped_markers:
+                        continue
+                    try:
+                        body_id = raw_env.sim.model.body_name2id(marker.root_body)
+                        marker_pos = np.array(raw_env.sim.data.body_xpos[body_id], dtype=float)
+                        dist = np.linalg.norm(eef_pos - marker_pos)
+                        if dist < min_dist:
+                            min_dist = dist
+                    except Exception:
+                        continue
+
+            # If all markers are wiped, task is complete
+            if min_dist == np.inf:
+                return 10.0  # Completion bonus
+
+            # ── 3. Smooth Checkpoint Indicator (Gaussian weighting) ───────
+            # Using a smooth Gaussian weighting (sigma_c = 0.15m) instead of a hard step threshold
+            # eliminates the reward cliff and provides a continuous, convex gradient toward
+            # unwiped markers across the entire table.
+            sigma_c = 0.15
+            I_checkpoint = float(np.exp(- (min_dist ** 2) / (2.0 * (sigma_c ** 2))))
+
+            # ── 4. Contact state ─────────────────────────────────────────
+            has_contact = float(bool(raw_obs.get('robot0_contact', False)))
+
+            # ── 5. Normal force (projected onto table normal) ────────────
+            # Table normal for 45-deg tilt around Y: n = [sin(45), 0, cos(45)]
+            tilt_rad = np.radians(45.0)
+            table_normal = np.array([np.sin(tilt_rad), 0.0, np.cos(tilt_rad)])
+            try:
+                robot = raw_env.robots[0]
+                arm_key = robot.arms[0] if hasattr(robot, 'arms') else 'right'
+                ft = np.array(robot.recent_ee_forcetorques[arm_key].current[:3], dtype=float)
+                F_normal = abs(np.dot(ft, table_normal))  # scalar normal force magnitude
+            except Exception:
+                F_normal = 0.0
+
+            # ── 6. Reward components ─────────────────────────────────────
+            # a) Contact reward, weighted by smooth checkpoint indicator
+            r_con_q = self.quality_w_con * has_contact * I_checkpoint
+
+            # b) Force quality: Bounded Gaussian centered at F_target=15N, sigma=15N.
+            #    Forces from 0 to 15N earn full reward (1.0). Forces from 15N to 60N decay smoothly
+            #    without instantly collapsing to zero, providing a continuous gradient.
+            f_excess = max(0.0, F_normal - self.quality_f_target)
+            sigma_f = getattr(self, 'quality_sigma', 15.0)
+            if has_contact > 0:
+                r_force_q = self.quality_w_force * I_checkpoint * np.exp(-(f_excess ** 2) / (2.0 * (sigma_f ** 2)))
+            else:
+                r_force_q = 0.0
+
+            # c) Smooth guidance toward nearest unwiped marker (always on)
+            r_guide = self.quality_w_guide * (1.0 - np.tanh(min_dist / self.quality_guide_scale))
+
+            return float(r_con_q + r_force_q + r_guide)
+
+        except Exception as e:
+            # Fail silently — never crash the training loop over reward computation
+            return 0.0
 
     def reset(self, seed=None, options=None):
         # Robosuite's native reset doesn't take a seed directly in the call usually,
@@ -280,6 +486,10 @@ class GeometricWrapper(gym.Wrapper):
         # and immediately reset the environment, undoing all setup work.
         # For other envs (Door, Wipe), self.env IS self.gym_env, so no difference.
         self.env.reset()
+
+        # Reset EMA filter state
+        self._ema_kp_matrix = None
+        self._ema_kp_rot = None
 
         # Cache peg tip Z for the P-controller dz calculation.
         # 'peg_head_pos' does not exist in the obs dict; we read the peg body
@@ -305,8 +515,9 @@ class GeometricWrapper(gym.Wrapper):
             self.current_prior = np.zeros(self.prior_dim, dtype=np.float32)
             self.current_w = 0.0
         
-        extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
-        flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
+        if self.add_prior_obs:
+            extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
+            flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
 
         self.prev_Kp = np.eye(3) # Default starting stiffness
         self.prev_ang_vel = np.zeros(3)
@@ -343,290 +554,187 @@ class GeometricWrapper(gym.Wrapper):
         
         return flat_obs, {}
 
-    def step(self, rl_action):
-        # if self.llm_planner is not None:
-        #     suggestion = self.llm_planner.query(self._last_obs_dict)
-        #     # Blend RL action with LLM prior entirely in normalized [-1,1] space.
-        #     # action_prior covers the first 9 dims: [6 Mandel params, 3 kp_rot].
-        #     w = suggestion.confidence
-        #     action = action.copy()
-        #     n = len(suggestion.action_prior)  # 9 for use_spd_manifold
-        #     action[:n] = (1 - w) * action[:n] + w * suggestion.action_prior
-        #     self._current_llm_mode = suggestion.mode
-
-        # --- TRUE RESIDUAL RL: BLEND USING VISIBLE STATE ---
-        action = rl_action.copy()
-        
-        # We handle SPD blending directly on the manifold below.
-        # For diagonal or baseline modes, Euclidean blending is mathematically valid or sufficient.
-        if not self.use_spd_manifold and self.llm_planner is not None:
-            # Pure Bi-Linear Residual Mapping with w-scaling support
-            # If w=0.8, the agent can only explore 20% away from the prior.
-            # If w=0.0 (or annealed to 0), the agent gets 100% full exploration space.
-            a_rl = action[:self.prior_dim] * (1.0 - self.current_w)
-            a_prior = self.current_prior
-            # If a_rl > 0, interpolate between prior and 1.0. If a_rl < 0, interpolate between prior and -1.0
-            action[:self.prior_dim] = np.where(a_rl > 0, 
-                                               a_prior + a_rl * (1.0 - a_prior), 
-                                               a_prior + a_rl * (a_prior + 1.0))
+    def _compute_stiffness(self, action):
+        """
+        Stage 1: Resolves the 3x3 Cartesian stiffness matrix and 3D rotational stiffness vector.
+        Supports:
+          - use_fixed: constant controller stiffness
+          - use_spd_manifold: Riemannian Log-Euclidean Residual (LLM) or full 6D Mandel basis (pure RL)
+          - Non-SPD (BASELINE & DIAG): Euclidean Residual Policy Learning (LLM) or 6D diagonal (pure RL)
+        """
+        if self.use_fixed:
+            robot = self.gym_env.unwrapped.robots[0]
+            fixed_kp = robot.composite_controller.part_controller_config['right']['kp']
+            return np.eye(3, dtype=np.float32) * fixed_kp, np.ones(3, dtype=np.float32) * fixed_kp
 
         if self.use_spd_manifold:
-            def get_spd_matrix_absolute(physical_vals):
-                m_params = np.zeros(6, dtype=np.float32)
-                m_params[0:3] = np.log(physical_vals)
-                m_tensor = torch.tensor(m_params, dtype=torch.float32).unsqueeze(0)
-                return spd_grl_map(m_tensor).squeeze(0).detach().numpy()
-            
-            _EPS = 1e-4
-
             if self.llm_planner is not None:
-                # 1. Decode LLM Prior linearly to prevent Limp Initialization
-                prior_physical = self.min_kp + 0.5 * (self.current_prior[:3] + 1.0) * (self.max_kp - self.min_kp)
-                K_llm = get_spd_matrix_absolute(prior_physical) + _EPS * np.eye(3)
-                
-                # 2. Determine target optimal stiffness using unrestricted Bi-Linear Euclidean mapping
-                # Scale agent action by (1 - w) to support fixed constraints or annealing
-                a_rl = action[:3] * (1.0 - self.current_w)
-                a_prior = self.current_prior[:3]
-                a_final = np.where(a_rl > 0, a_prior + a_rl * (1.0 - a_prior), a_prior + a_rl * (a_prior + 1.0))
-                target_physical = self.min_kp + 0.5 * (a_final + 1.0) * (self.max_kp - self.min_kp)
-                
-                # 3. Tangent Space Absolute Mapping (Replaces Canonical Group Action)
-                m_params_rl = np.zeros(6, dtype=np.float32)
-                m_params_rl[0:3] = np.log(target_physical)
-                m_params_rl[3:6] = action[3:6] * 0.2 * (1.0 - self.current_w)  # Off-diagonal exploration
-                
-                m_tensor_rl = torch.tensor(m_params_rl, dtype=torch.float32).unsqueeze(0)
+                # ── Log-Euclidean Riemannian Residual Mapping (Arsigny et al. 2006, Davchev et al. 2022) ──
+                # Geodesic boundary-scaled tangent residual: prevents exponential overshoot beyond [min_kp, max_kp]
+                prior_trans = self.min_kp + 0.5 * (self.current_prior[:3] + 1.0) * (self.max_kp - self.min_kp)
+                prior_rot   = self.min_kp + 0.5 * (self.current_prior[6:9] + 1.0) * (self.max_kp - self.min_kp)
+
+                ln_min = np.log(self.min_kp)
+                ln_max = np.log(self.max_kp)
+                ln_prior = np.log(np.clip(prior_trans, self.min_kp, self.max_kp))
+
+                S_prior = np.zeros(6, dtype=np.float32)
+                S_prior[0:3] = ln_prior
+                S_prior[3:6] = 0.0  # Uncoupled nominal prior
+
+                # Tangent space residual from RL policy: geodesic interpolation toward manifold boundary
+                delta_S = np.zeros(6, dtype=np.float32)
+                for i in range(3):
+                    if action[i] >= 0:
+                        delta_S[i] = action[i] * (1.0 - self.current_w) * (ln_max - ln_prior[i])
+                    else:
+                        delta_S[i] = action[i] * (1.0 - self.current_w) * (ln_prior[i] - ln_min)
+
+                # Bounded off-diagonal coupling matching pure RL SPD exploration
+                delta_S[3:6] = action[3:6] * (1.0 - self.current_w) * 0.2
+
+                S_total = S_prior + delta_S
+                m_tensor_rl = torch.tensor(S_total, dtype=torch.float32).unsqueeze(0)
                 kp_matrix = np.real(spd_grl_map(m_tensor_rl).squeeze(0).detach().numpy())
 
-                # ── Eigenvalue clamping ────────────────────────────────────────
-                # Clamping preserves SPD structure (all eigenvalues remain positive) 
-                # while guaranteeing physical validity within [min_kp, max_kp].
-                _eigvals, _eigvecs = np.linalg.eigh(kp_matrix)
-                _pre_clamp_max = float(np.max(_eigvals))
-                self._spd_pre_clamp_eigmax_history.append(_pre_clamp_max)
-                if _pre_clamp_max > self.max_kp or float(np.min(_eigvals)) < self.min_kp:
-                    self._spd_clamp_violations += 1
-                _eigvals = np.clip(_eigvals, self.min_kp, self.max_kp)
-                kp_matrix = _eigvecs @ np.diag(_eigvals) @ _eigvecs.T
-
-                # Bi-linear residual for remaining Euclidean prior dims (like orientation kp_rot)
-
-                if self.prior_dim > 6:
-                    a_rl_rot = action[6:self.prior_dim] * (1.0 - self.current_w)
-                    a_prior_rot = self.current_prior[6:self.prior_dim]
-                    action[6:self.prior_dim] = np.where(a_rl_rot > 0, 
-                                                        a_prior_rot + a_rl_rot * (1.0 - a_prior_rot), 
-                                                        a_prior_rot + a_rl_rot * (a_prior_rot + 1.0))
+                delta_k_rot = action[6:9] * (1.0 - self.current_w) * 0.5 * (self.max_kp - self.min_kp)
+                kp_rot = np.clip(prior_rot + delta_k_rot, self.min_kp, self.max_kp)
             else:
-                # Baseline SPD: Full 6D Mandel basis learning.
+                # Baseline SPD: Full 6D Mandel basis learning (pure RL).
                 # Linear decoding for diagonals to prevent Limp Initialization.
                 target_physical = self.min_kp + 0.5 * (action[:3] + 1.0) * (self.max_kp - self.min_kp)
-                
+
                 m_params_rl = np.zeros(6, dtype=np.float32)
                 m_params_rl[0:3] = np.log(target_physical)
                 m_params_rl[3:6] = action[3:6] * 0.2  # Full 6D off-diagonal exploration
-                
+
                 m_tensor_rl = torch.tensor(m_params_rl, dtype=torch.float32).unsqueeze(0)
                 kp_matrix = np.real(spd_grl_map(m_tensor_rl).squeeze(0).detach().numpy())
-                
-                # Clamp eigenvalues — strictly required as off-diagonals can push eigenvalues out of bounds
-                _eigvals, _eigvecs = np.linalg.eigh(kp_matrix)
-                _pre_clamp_max = float(np.max(_eigvals))
-                self._spd_pre_clamp_eigmax_history.append(_pre_clamp_max)
-                if _pre_clamp_max > self.max_kp or float(np.min(_eigvals)) < self.min_kp:
-                    self._spd_clamp_violations += 1
-                _eigvals = np.clip(_eigvals, self.min_kp, self.max_kp)
-                kp_matrix = _eigvecs @ np.diag(_eigvals) @ _eigvecs.T
+                kp_rot = self.min_kp + 0.5 * (action[6:9] + 1.0) * (self.max_kp - self.min_kp)
 
-            kp_rot_raw = action[6:9]
-            kp_rot_scaled = self.min_kp + 0.5 * (kp_rot_raw + 1.0) * (self.max_kp - self.min_kp)
+            # Spectral clamping and symmetrization
+            _eigvals, _eigvecs = np.linalg.eigh(kp_matrix)
+            _pre_clamp_max = float(np.max(_eigvals))
+            self._spd_pre_clamp_eigmax_history.append(_pre_clamp_max)
+            if _pre_clamp_max > self.max_kp or float(np.min(_eigvals)) < self.min_kp:
+                self._spd_clamp_violations += 1
+            _eigvals = np.clip(_eigvals, self.min_kp, self.max_kp)
+            kp_matrix = _eigvecs @ np.diag(_eigvals) @ _eigvecs.T
+            kp_matrix = 0.5 * (kp_matrix + kp_matrix.T)
+            return kp_matrix, kp_rot
 
-            if self.task_type == 'nutassembly':
-                # ── NutAssembly-specific overrides ─────────────────────────────
-                # We now learn kp_rot, so no hardcoded override is needed.
-                kin_raw = action[-6:]
-                max_trans_wiggle = 0.002 # 2 mm per step
-                max_rot_wiggle = 0.05    # ~2.8 degrees per step
-                
-                dx = float(kin_raw[0] * max_trans_wiggle)
-                dy = float(kin_raw[1] * max_trans_wiggle)
-                
-                d_roll  = float(kin_raw[3] * max_rot_wiggle)
-                d_pitch = float(kin_raw[4] * max_rot_wiggle)
-                d_yaw   = float(kin_raw[5] * max_rot_wiggle)
-
-                # P-controller: push nut down onto peg proportional to how far
-                # above the peg tip the nut currently is.
-                # SquareNut_pos[2] is the nut's absolute Z; _peg_top_z is the peg
-                # tip Z cached each episode. dz is negative (downward).
-                _P_GAIN = 1.5
-                _FALLBACK_DZ = -0.010
-                try:
-                    nut_pos = self._last_obs_dict.get('SquareNut_pos',
-                              self._last_obs_dict.get('RoundNut_pos', None))
-                    if nut_pos is not None and self._peg_top_z is not None:
-                        dz_above = float(nut_pos[2]) - self._peg_top_z
-                        dz = float(-_P_GAIN * max(dz_above, 0.0))
-                        dz = np.clip(dz, -0.04, 0.0)
-                    else:
-                        dz = _FALLBACK_DZ
-                except Exception:
-                    dz = _FALLBACK_DZ
-
-                trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
-                gripper_command = np.array([1.0], dtype=np.float32)
-
-                robosuite_action = np.concatenate([
-                    kp_matrix.flatten(),
-                    kp_rot_scaled,
-                    trajectory_command,
-                    gripper_command,
-                ])
-            else:
-                # low, high = self.gym_env.action_space.low, self.gym_env.action_space.high
-                # kin_raw  = action[9:] 
-                # kin_low  = low[-7:]
-                # kin_high = high[-7:]
-                # kin_scaled = kin_low + 0.5 * (kin_raw + 1.0) * (kin_high - kin_low)
-                # print(kin_raw, kin_scaled)
-                robosuite_action = np.concatenate([
-                    kp_matrix.flatten(),   # 9 dims
-                    kp_rot_scaled,         # 3 dims
-                    action[9:],            # 7 dims (pos+ori+gripper, scaled to bounds)
-                ])
-
-            physical_kp_vals = np.concatenate([np.diag(kp_matrix), kp_rot_scaled])
-            kp_matrix_3x3 = kp_matrix
-        elif self.use_diag_manifold:
-            kp_raw = action[:6].copy()
-
-            # kp_trans[:3] — linear-space decoding (matches _kp_trans_to_norm_linear in planner).
-            # Fixes the limp initialization caused by log-space!
-            kp_trans_scaled = self.min_kp + 0.5 * (kp_raw[:3] + 1.0) * (self.max_kp - self.min_kp)
-
-            # kp_rot[3:6] — linear-space decoding (matches _kp_rot_to_norm in planner).
-            kp_rot_scaled = self.min_kp + 0.5 * (kp_raw[3:6] + 1.0) * (self.max_kp - self.min_kp)
-
-            kp_scaled = np.concatenate([kp_trans_scaled, kp_rot_scaled])
-
-            if self.task_type == 'nutassembly':
-                kin_raw = action[-6:]
-                max_trans_wiggle = 0.002 # 2 mm per step
-                max_rot_wiggle = 0.05    # ~2.8 degrees per step
-                
-                dx = float(kin_raw[0] * max_trans_wiggle)
-                dy = float(kin_raw[1] * max_trans_wiggle)
-                
-                d_roll  = float(kin_raw[3] * max_rot_wiggle)
-                d_pitch = float(kin_raw[4] * max_rot_wiggle)
-                d_yaw   = float(kin_raw[5] * max_rot_wiggle)
-
-                # Scripted P-controller descent along -Z (insertion axis).
-                _P_GAIN = 1.5
-                _FALLBACK_DZ = -0.010
-                try:
-                    nut_pos = self._last_obs_dict.get('SquareNut_pos',
-                              self._last_obs_dict.get('RoundNut_pos', None))
-                    if nut_pos is not None and self._peg_top_z is not None:
-                        dz_above = float(nut_pos[2]) - self._peg_top_z
-                        dz = float(-_P_GAIN * max(dz_above, 0.0))
-                        dz = np.clip(dz, -0.04, 0.0)
-                    else:
-                        dz = _FALLBACK_DZ
-                except Exception:
-                    dz = _FALLBACK_DZ
-
-                trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
-                gripper_command = np.array([1.0], dtype=np.float32)
-
-                robosuite_action = np.concatenate([
-                    kp_scaled,  # 6 dims (kp_trans + kp_rot, physical)
-                    trajectory_command,
-                    gripper_command,
-                ])
-            else:
-                # Door / Wipe: agent controls pos+ori+gripper via action[6:]
-                # action is 13-dim; action[6:] = 7 dims (pos+ori+gripper in [-1,1])
-                robosuite_action = np.concatenate([
-                    kp_scaled,   # 6 dims (kp_trans + kp_rot, physical)
-                    action[6:],  # 7 dims (pos + ori + gripper, in [-1,1])
-                ])  # → 13 dims ✓
-
-            physical_kp_vals = kp_scaled
-            kp_matrix_3x3 = np.diag(kp_scaled[:3])
-        elif self.use_fixed:
-            # ✅ FIXED BASELINE MATH
-            low, high = self.action_space.low, self.action_space.high
-            robosuite_action = low + 0.5 * (action + 1.0) * (high - low)
-
-            robot = self.gym_env.unwrapped.robots[0]
-            fixed_kp = robot.composite_controller.part_controller_config['right']['kp']
-            physical_kp_vals = np.ones(6) * fixed_kp
-            kp_matrix_3x3 = np.diag(physical_kp_vals[:3])
         else:
-            # Standard baseline (variable_kp, no manifold)
-            # low, high = self.action_space.low, self.action_space.high
-            low, high = self.gym_env.action_space.low, self.gym_env.action_space.high
+            # ── Non-SPD (BASELINE & DIAG): 6D Diagonal Stiffness ──
+            if self.llm_planner is not None:
+                prior_trans = self.min_kp + 0.5 * (self.current_prior[:3] + 1.0) * (self.max_kp - self.min_kp)
+                prior_rot   = self.min_kp + 0.5 * (self.current_prior[3:6] + 1.0) * (self.max_kp - self.min_kp)
 
-            if self.task_type == 'nutassembly':
-                # action has shape prior_dim + gripper_dim. Slice to prior_dim (6)
-                prior_action = action[:self.prior_dim]
-                
-                # prior_action[:3] is trans, prior_action[3:6] is rot
-                kp_trans_scaled = low[:3] + 0.5 * (prior_action[:3] + 1.0) * (high[:3] - low[:3])
-                kp_rot_scaled = low[3:6] + 0.5 * (prior_action[3:6] + 1.0) * (high[3:6] - low[3:6])
-                
-                kin_raw = action[-6:]
-                max_trans_wiggle = 0.002 # 2 mm per step
-                max_rot_wiggle = 0.05    # ~2.8 degrees per step
-                
-                dx = float(kin_raw[0] * max_trans_wiggle)
-                dy = float(kin_raw[1] * max_trans_wiggle)
-                
-                d_roll  = float(kin_raw[3] * max_rot_wiggle)
-                d_pitch = float(kin_raw[4] * max_rot_wiggle)
-                d_yaw   = float(kin_raw[5] * max_rot_wiggle)
+                delta_trans = action[:3] * (1.0 - self.current_w) * 0.5 * (self.max_kp - self.min_kp)
+                delta_rot   = action[3:6] * (1.0 - self.current_w) * 0.5 * (self.max_kp - self.min_kp)
 
-                # Scripted P-controller descent along -Z (insertion axis).
-                _P_GAIN = 1.5
-                _FALLBACK_DZ = -0.010
-                try:
-                    nut_pos = self._last_obs_dict.get('SquareNut_pos',
-                              self._last_obs_dict.get('RoundNut_pos', None))
-                    if nut_pos is not None and self._peg_top_z is not None:
-                        dz_above = float(nut_pos[2]) - self._peg_top_z
-                        dz = float(-_P_GAIN * max(dz_above, 0.0))
-                        dz = np.clip(dz, -0.04, 0.0)
-                    else:
-                        dz = _FALLBACK_DZ
-                except Exception:
-                    dz = _FALLBACK_DZ
-
-                trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
-                gripper_command = np.array([1.0], dtype=np.float32)
-
-                robosuite_action = np.concatenate([
-                    kp_trans_scaled,
-                    kp_rot_scaled,
-                    trajectory_command,
-                    gripper_command,
-                ])
+                kp_trans = np.clip(prior_trans + delta_trans, self.min_kp, self.max_kp)
+                kp_rot   = np.clip(prior_rot + delta_rot, self.min_kp, self.max_kp)
             else:
-                kp_trans_scaled = self.min_kp + 0.5 * (action[:3] + 1.0) * (self.max_kp - self.min_kp)
-                kp_rot_scaled   = self.min_kp + 0.5 * (action[3:6] + 1.0) * (self.max_kp - self.min_kp)
-                
-                robosuite_action = np.concatenate([
-                    kp_trans_scaled,
-                    kp_rot_scaled,
-                    action[6:],
-                ])
-                
+                kp_trans = self.min_kp + 0.5 * (action[:3] + 1.0) * (self.max_kp - self.min_kp)
+                kp_rot   = self.min_kp + 0.5 * (action[3:6] + 1.0) * (self.max_kp - self.min_kp)
 
-            physical_kp_vals  = np.concatenate([kp_trans_scaled, kp_rot_scaled])
-            kp_matrix_3x3     = np.diag(kp_trans_scaled)
+            return np.diag(kp_trans), kp_rot
 
-        
+    def _assemble_robosuite_action(self, action, kp_matrix_3x3, kp_rot_scaled):
+        """
+        Stage 2: Assembles the robosuite action vector containing:
+          - Stiffness parameters (9 elements flattened for SPD, or 6 elements for Baseline)
+          - Kinematic commands (P-controller descent for NutAssembly, or RL delta pos+ori for Door/Wipe)
+          - Gripper command
+        """
+        if self.use_fixed:
+            low, high = self.action_space.low, self.action_space.high
+            return low + 0.5 * (action + 1.0) * (high - low)
+
+        stiffness_part = kp_matrix_3x3.flatten() if self.use_spd_manifold else np.diag(kp_matrix_3x3)
+
+        if self.task_type == 'nutassembly':
+            kin_raw = action[-6:]
+            max_trans_wiggle = 0.002 # 2 mm per step
+            max_rot_wiggle = 0.05    # ~2.8 degrees per step
+
+            dx = float(kin_raw[0] * max_trans_wiggle)
+            dy = float(kin_raw[1] * max_trans_wiggle)
+
+            d_roll  = float(kin_raw[3] * max_rot_wiggle)
+            d_pitch = float(kin_raw[4] * max_rot_wiggle)
+            d_yaw   = float(kin_raw[5] * max_rot_wiggle)
+
+            _P_GAIN = 1.5
+            _FALLBACK_DZ = -0.010
+            try:
+                nut_pos = self._last_obs_dict.get('SquareNut_pos',
+                          self._last_obs_dict.get('RoundNut_pos', None))
+                if nut_pos is not None and self._peg_top_z is not None:
+                    dz_above = float(nut_pos[2]) - self._peg_top_z
+                    dz = float(-_P_GAIN * max(dz_above, 0.0))
+                    dz = np.clip(dz, -0.04, 0.0)
+                else:
+                    dz = _FALLBACK_DZ
+            except Exception:
+                dz = _FALLBACK_DZ
+
+            trajectory_command = np.array([dx, dy, dz, d_roll, d_pitch, d_yaw], dtype=np.float32)
+            gripper_command = np.array([1.0], dtype=np.float32)
+
+            return np.concatenate([
+                stiffness_part,
+                kp_rot_scaled,
+                trajectory_command,
+                gripper_command,
+            ])
+        else:
+            # Door / Wipe: agent controls pos+ori (+gripper if applicable) via action[prior_dim:]
+            kin_gripper_part = action[self.prior_dim:]
+            return np.concatenate([
+                stiffness_part,
+                kp_rot_scaled,
+                kin_gripper_part,
+            ])
+
+    def step(self, rl_action):
+        action = rl_action.copy()
+
+        # Stage 1: Resolve physical stiffness matrix (3x3) and rotational vector (3,)
+        kp_matrix_3x3, kp_rot_scaled = self._compute_stiffness(action)
+        physical_kp_vals = np.concatenate([np.diag(kp_matrix_3x3), kp_rot_scaled])
+
+        # Stage 2: Assemble robosuite action (stiffness + kinematics + gripper)
+        robosuite_action = self._assemble_robosuite_action(action, kp_matrix_3x3, kp_rot_scaled)
+
+        # ── UNIVERSAL STIFFNESS EMA FILTER ──────────────────────────────────────────
+        # Applies a low-pass filter to the final physical stiffness matrix and 
+        # rotational vector. By placing it here, it works universally for BASELINE, 
+        # DIAG, and SPD configurations, ensuring a fair scientific comparison.
+        if self.use_ema:
+            if self._ema_kp_matrix is None:
+                self._ema_kp_matrix = kp_matrix_3x3
+                self._ema_kp_rot = physical_kp_vals[3:6]
+            else:
+                self._ema_kp_matrix = self.ema_alpha * kp_matrix_3x3 + (1.0 - self.ema_alpha) * self._ema_kp_matrix
+                self._ema_kp_rot = self.ema_alpha * physical_kp_vals[3:6] + (1.0 - self.ema_alpha) * self._ema_kp_rot
+            
+            # Overwrite with smoothed values
+            kp_matrix_3x3 = self._ema_kp_matrix
+            
+            # Update physical_kp_vals for logging/metrics
+            physical_kp_vals[:3] = np.diag(self._ema_kp_matrix)
+            physical_kp_vals[3:6] = self._ema_kp_rot
+            
+            # Repack the robosuite_action with the smoothed values
+            if self.use_spd_manifold:
+                robosuite_action[:9] = self._ema_kp_matrix.flatten()
+                robosuite_action[9:12] = self._ema_kp_rot
+            else:
+                robosuite_action[:3] = np.diag(self._ema_kp_matrix)
+                robosuite_action[3:6] = self._ema_kp_rot
+
+
         # print('physical_kp_vals: ', physical_kp_vals)
         # check if the env uses a gripper and if so set it to always closed (1.0). The criteria is that if the name is not a wiping
         # env, then we assume it has a gripper that needs to be closed. Allow temporary suppression (e.g., scripted primitives)
@@ -676,17 +784,18 @@ class GeometricWrapper(gym.Wrapper):
             except Exception as e:
                 pass
 
-        # Early termination on success: Robosuite's horizon-based
-        # 'done' doesn't fire until horizon end, but we want to end the episode
-        # immediately upon task completion so the agent doesn't receive confusing post-success steps.
-        # A success_bonus compensates for the dense-reward steps discarded by early termination,
-        # preventing the critic from systematically undervaluing success states relative to the
-        # exploration-trap dense reward. Applied uniformly to all binary-success envs (Door, NAS).
+        # Early termination on success with horizon-compensating bonus:
+        # Prevents post-completion drift (where the policy flails around and accidentally re-closes the door)
+        # while awarding the remaining horizon steps so early success is strictly superior to lingering.
         if not terminated:
             try:
                 if bool(self.env.unwrapped._check_success()):
                     terminated = True
-                    reward += self.success_bonus
+                    raw_env = self.env.unwrapped
+                    horizon = getattr(raw_env, 'horizon', 100)
+                    remaining_steps = max(0, horizon - self.episode_steps)
+                    # +1.0 for current success step + 1.0 per remaining step
+                    reward += 1.0 + float(remaining_steps) * 1.0
             except AttributeError:
                 pass
 
@@ -727,8 +836,9 @@ class GeometricWrapper(gym.Wrapper):
             self.current_w = suggestion.confidence
             self._current_llm_mode = suggestion.mode
 
-        extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
-        flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
+        if self.add_prior_obs:
+            extra_state = np.concatenate([self.current_prior, [self.current_w]], dtype=np.float32)
+            flat_obs = np.concatenate([flat_obs, extra_state], dtype=np.float32)
         # print('flat obs', flat_obs.shape)
         epsilon = 1e-6
         safe_kp = kp_matrix_3x3 + np.eye(3) * epsilon
@@ -775,6 +885,23 @@ class GeometricWrapper(gym.Wrapper):
         self.ang_accel_history.append(ang_accel)
         self.prev_ang_vel = current_ang_vel.copy()
 
+        # ── QUALITY REWARD (arXiv:2502.12599 adaptation) ─────────────────────
+        if self.use_quality_reward:
+            quality_reward = self._compute_quality_reward()
+            # Scale quality reward by the environment's reward scale and normalization factor to maintain consistent scale
+            try:
+                raw_env = self.env.unwrapped
+                if hasattr(raw_env, 'reward_scale') and hasattr(raw_env, 'reward_normalization_factor'):
+                    scale_factor = raw_env.reward_scale * raw_env.reward_normalization_factor
+                    quality_reward *= scale_factor
+            except Exception:
+                pass
+            reward += quality_reward
+            # Expose for debugging/logging
+            if not hasattr(self, '_last_quality_reward'):
+                self._last_quality_reward = 0.0
+            self._last_quality_reward = quality_reward
+
         # Apply the scale-invariant Riemannian Jerk Penalty universally
         # (For BASELINE's diagonal matrices, this naturally reduces to the log-ratio penalty, 
         # which perfectly matches the scale without blowing up like Euclidean jerk would).
@@ -794,6 +921,7 @@ class GeometricWrapper(gym.Wrapper):
 
         raw_success = self.env.unwrapped._check_success()
         info["is_success"] = bool(raw_success)
+        info["success"] = bool(raw_success)
 
         if self.is_eval:
             self.kp_history.append(physical_kp_vals.copy())

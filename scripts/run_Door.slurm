@@ -1,14 +1,14 @@
 #!/bin/bash
 #
 # --- Slurm Configuration ---
-#SBATCH --job-name=Door_HiResVIC
-#SBATCH --output=logs/door_%j.txt
-#SBATCH --error=logs/door_%j.err
+#SBATCH --job-name=Door_geo
+#SBATCH --output=logs/door_geo_%j.txt
+#SBATCH --error=logs/door_geo_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=80
+#SBATCH --cpus-per-task=86
 #SBATCH --mem=80G                            
-#SBATCH --time=168:00:00
+#SBATCH --time=24:00:00
 #SBATCH --gres=gpu:lovelace:1                 
 
 
@@ -40,26 +40,26 @@ mkdir -p logs/door
 
 # ── Fixed hypers ──────────────────────────────────────────────────────────────
 TASK="Door"
-STEPS=2000000
-HORIZON=50
-N_ENVS=8
+STEPS=1000000
+HORIZON=100
+N_ENVS=16
 LR=3e-4
-# GAMMA=0.95
+BATCH_SIZE=1024
 GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
-SEEDS=(0 1 2 3 4 5 6 7 8 9)
+# GAMMA=0.98
+GAMMA_START=$GAMMA
+SEEDS=(0 1 2 3 4)
 
 # ── LLM prior schedule ────────────────────────────────────────────────────────
-# Anneal from W_INIT → W_FLOOR over the first 25% of per-env steps.
-# Per-env steps ≈ STEPS / N_ENVS = 250,000 / 8 = 31,250.
-LLM_W_INIT=0.6
-LLM_W_FLOOR=0.0
-LLM_ANNEAL=$((STEPS * 50 / 100 / N_ENVS))   # = 31,250
-LLM_BACKEND="ollama"
+LLM_W_INIT=0.60
+LLM_W_FLOOR=0.60
+LLM_ANNEAL=0
+LLM_BACKEND=""
 LLM_MODEL="llama3.2"
-LLM_QUERY_INTERVAL=12
+LLM_QUERY_INTERVAL=10
 
 wait_for_queue() {
-    while [ $(jobs -pr | wc -l) -ge 11 ]; do
+    while [ $(jobs -pr | wc -l) -ge 6 ]; do
         sleep 10
     done
 }
@@ -107,6 +107,8 @@ run_geo() {
         --horizon "$HORIZON"
         --n_envs "$N_ENVS"
         --gamma "$GAMMA"
+        --gamma_start "$GAMMA_START"
+        --batch_size "$BATCH_SIZE"
         --seed "$SEED"
         --lr "$LR"
         --record_video
@@ -167,56 +169,79 @@ run_llm() {
     echo "  ✅ Done: ${EXP_NAME} SEED=${SEED}"
 }
 
-# echo "Starting Ollama server on port ${UNIQUE_PORT}..."
-# ~/.local/bin/ollama serve &
-# sleep 10
-# echo ""
-# echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
-# if ! check_ollama; then
-#     echo "❌ Ollama not responding. Aborting."
-#     exit 1
-# fi
-# echo "✅ Ollama OK — proceeding."
-# echo "$OLLAMA_RESPONSE" | grep -o '"response":"[^"]*"'
-# echo ""
+# Setup cleanup trap for Ollama if started
+cleanup() {
+    if [ -n "$OLLAMA_PID" ]; then
+        echo "Stopping background Ollama server (PID $OLLAMA_PID)..."
+        kill "$OLLAMA_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
+if [ "$LLM_BACKEND" == "ollama" ]; then
+    echo "Starting Ollama server on port ${UNIQUE_PORT}..."
+    ~/.local/bin/ollama serve &
+    OLLAMA_PID=$!
+
+    # Clean up Ollama on script exit, interruption, or job cancellation
+    cleanup() {
+        if [ -n "$OLLAMA_PID" ]; then
+            echo "Stopping background Ollama server (PID $OLLAMA_PID)..."
+            kill "$OLLAMA_PID" 2>/dev/null || true
+        fi
+    }
+    trap cleanup EXIT INT TERM
+    sleep 5
+
+    echo "Pulling model ${LLM_MODEL} (if not already downloaded)..."
+    ~/.local/bin/ollama pull ${LLM_MODEL}
+    sleep 2
+
+    echo ""
+    echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
+    if ! check_ollama; then
+        echo "❌ Ollama not responding. Aborting."
+        exit 1
+    fi
+    echo "✅ Ollama OK — proceeding."
+    echo "$OLLAMA_RESPONSE" | grep -o '"response":"[^"]*"'
+    echo ""
+fi
+
+TRAIN_PIDS=()
 
 for SEED in "${SEEDS[@]}"; do
     echo "════════════════  SEED ${SEED}  ════════════════"
 
-    # 1. BASELINE — diagonal variable_kp, Euclidean obs
-    wait_for_queue
-    run_geo "FALSE" "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    # # 1. BASELINE — diagonal variable_kp, Euclidean obs
+    # wait_for_queue
+    # run_geo "FALSE" "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}_HCET" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
-    # 2. DIAG — diagonal SPD (log-scale exponential map)
-    wait_for_queue
-    run_geo "FALSE" "FALSE" "TRUE"  "DOOR_DIAG_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    # # 2. DIAG — diagonal SPD (log-scale exponential map)
+    # wait_for_queue
+    # run_geo "FALSE" "FALSE" "TRUE"  "DOOR_DIAG_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # 3. SPD_ONLY — full 3×3 SPD manifold
     wait_for_queue
-    run_geo "TRUE"  "FALSE" "FALSE" "DOOR_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-    
-    # 4. LIE — SO(3) Lie-group observation only
-    # wait_for_queue
-    # run_geo "FALSE" "TRUE"  "FALSE" "DOOR_LIE_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
-
-    # 5. FULL_GRL — full SPD + SO(3) Lie-group observation
-    wait_for_queue
-    run_geo "TRUE"  "TRUE"  "FALSE" "DOOR_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    run_geo "TRUE"  "FALSE" "FALSE" "DOOR_SPD_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}_HCET" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     # # 6. BASELINE with LLM
     # wait_for_queue
     # run_llm "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # # 7. SPD with LLM
     # wait_for_queue
     # run_llm "TRUE"  "FALSE" "DOOR_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
-
-    # # 9. FULL_GRL + LLM
-    # wait_for_queue
-    # run_llm "TRUE"  "TRUE"  "DOOR_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
 done
-wait
+
+# Wait ONLY for all RL training processes to finish
+wait "${TRAIN_PIDS[@]}"
 
 echo ""
 echo "🎉  All Door experiments complete!"

@@ -219,12 +219,35 @@ def parse_args():
     parser.add_argument("--use_diag", action="store_true", help="Enable Diagonal SPD Riemannian Manifold")
     parser.add_argument("--use_fixed", action="store_true", help="Enable fixed stiffness (no VIC, but still learn the residual on top of the fixed controller)")
     parser.add_argument("--fixed_kp", type=int, default=150, help="Fixed kp value")
+    # Quality reward flags (arXiv:2502.12599 adaptation)
+    parser.add_argument("--use_quality_reward", action="store_true",
+                        help="Enable checkpoint-gated quality reward for scattered-marker wiping task")
+    parser.add_argument("--use_sequential_waypoints", action="store_true", default=False,
+                        help="Enforce sequential Y-sorted waypoint guidance. Default: False (nearest-mode). "
+                             "Only enable if adding gripper_to_active_waypoint to obs.")
+    parser.add_argument("--quality_f_target", type=float, default=15.0,
+                        help="Target normal force (N) for the Gaussian force quality reward")
+    parser.add_argument("--quality_sigma", type=float, default=15.0,
+                        help="Std-dev (N) of the force quality Gaussian")
+    parser.add_argument("--quality_r_checkpoint", type=float, default=0.08,
+                        help="Checkpoint radius (m): EEF must be this close to earn quality reward")
+    parser.add_argument("--quality_w_con", type=float, default=1.5,
+                        help="Weight for checkpoint-gated contact reward")
+    parser.add_argument("--quality_w_force", type=float, default=2.0,
+                        help="Weight for force quality Gaussian reward")
+    parser.add_argument("--quality_w_guide", type=float, default=1.5,
+                        help="Weight for nearest-marker guidance reward")
+    parser.add_argument("--quality_guide_scale", type=float, default=0.35,
+                        help="Length scale (m) for r_guide — use ~35cm so gradient exists from hover height")
     parser.add_argument("--gamma", type=float, default=0.99, help="gamma parameter for SAC algorithm")
     parser.add_argument("--horizon", type=int, default=170, help="Horizon parameter for SAC algorithm")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for SAC algorithm")
 
 
     parser.add_argument("--use_llm_prior", action="store_true")
+    parser.add_argument("--add_prior_obs", action="store_true",
+                        help="Append [prior_actions, confidence_w] to obs for ALL configs. "
+                             "Off by default (clean obs). Enable only for LLM ablation comparisons.")
     parser.add_argument("--llm_backend", type=str, default="ollama", choices=["openai", "ollama"])
     parser.add_argument("--llm_query_interval", type=int, default=50)
     parser.add_argument("--llm_prior_weight", type=float, default=0.4)
@@ -264,7 +287,11 @@ def parse_args():
                         choices=["none", "teleport", "scripted", "both"],
                         help="Initialize episodes with a motion primitive: 'teleport', 'scripted', 'both', or 'none'.")
     parser.add_argument("--use_domain_rand", action="store_true",
-                        help="Enable domain randomization for TiltedWipe (tilt angle ±7°, table size 70-100%%).")
+                        help="Enable domain randomization for TiltedWipe (tilt angle ±7°, table size 70-100%).")
+    parser.add_argument("--early_terminate", action="store_true",
+                        help="If set, enables early termination upon _check_success(). Default False (runs until horizon).")
+    parser.add_argument("--use_ema", action="store_true",
+                        help="Enable Universal Stiffness EMA Filter for smoothing.")
     parser.add_argument("--quat_debug", action="store_true",
                         help="Print quaternion diagnostic candidates for nut handle orientation.")
     parser.add_argument("--gamma_start", type=float, default=None,
@@ -279,6 +306,8 @@ def parse_args():
     
     # Logging Args
     parser.add_argument("--run_name", type=str, required=True, help="Name of the run for logging/saving")
+    
+    parser.add_argument("--load_model", type=str, default=None, help="Path to best_model.zip to resume fine-tuning from")
     
     return parser.parse_args()
 
@@ -310,7 +339,12 @@ def make_video_env(args):
         task_type = 'wipe'
         task_config = load_wipe_task_config()
         task_config["num_markers"] = args.num_markers
-        task_config["use_condensed_obj_obs"] = True
+        task_config["use_condensed_obj_obs"] = False
+        if getattr(args, 'use_quality_reward', False):
+            task_config["wipe_contact_reward"] = 0.0
+            task_config["distance_multiplier"] = 0.0
+            task_config["distance_th_multiplier"] = 0.0
+            task_config["excess_force_penalty_mul"] = 0.0
         task_metrics = wipe_task_metrics_fn
     elif 'nutassembly' in env_lower:
         task_type = 'nutassembly'
@@ -363,10 +397,10 @@ def make_video_env(args):
                 tilt_min_deg=38.0,
                 tilt_max_deg=52.0,
                 size_scale_min=0.7,
-                randomize_friction=False,
+                randomize_friction=True,
             )
         if getattr(args, 'primitive_init', 'none') in ('teleport', 'both'):
-            env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.30)
+            env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.15, is_eval=is_eval)
     
     # ✅ Auto-select profile: VLM overrides, then env-specific defaults
     llm_profile_path = args.llm_profile
@@ -378,7 +412,7 @@ def make_video_env(args):
             llm_profile_path = "configs/door_impedance_profile.yaml"
         elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
             # Auto-select Wipe profile when user hasn't explicitly overridden --llm_profile
-            llm_profile_path = "configs/wipe_impedance_profile_v2.yaml"
+            llm_profile_path = "configs/wipe_impedance_profile_HQ.yaml"
     
     
     if task_type == 'wipe':
@@ -398,12 +432,14 @@ def make_video_env(args):
         env=env,
         stiffness_penalty=stiffness_penalty,
         success_bonus=success_bonus,
+        early_terminate_on_success=getattr(args, 'early_terminate', False),
         use_spd_manifold=args.use_spd,
         use_lie_group=args.use_lie,
         use_diag_manifold=args.use_diag,
         use_fixed=args.use_fixed,
         is_eval=is_eval,
         use_llm_prior=args.use_llm_prior,
+        use_ema=args.use_ema,
         llm_backend=args.llm_backend,
         llm_model=args.vlm_model if args.use_vlm else args.llm_model,
         llm_query_interval=args.llm_query_interval,
@@ -415,6 +451,16 @@ def make_video_env(args):
         task_type=task_type,
         task_metrics_fn=task_metrics,
         use_vision=args.use_vlm,
+        add_prior_obs=getattr(args, 'add_prior_obs', False),
+        use_quality_reward=getattr(args, 'use_quality_reward', False),
+        use_sequential_waypoints=getattr(args, 'use_sequential_waypoints', True),
+        quality_f_target=getattr(args, 'quality_f_target', 15.0),
+        quality_sigma=getattr(args, 'quality_sigma', 15.0),
+        quality_r_checkpoint=getattr(args, 'quality_r_checkpoint', 0.08),
+        quality_w_con=getattr(args, 'quality_w_con', 1.5),
+        quality_w_force=getattr(args, 'quality_w_force', 2.0),
+        quality_w_guide=getattr(args, 'quality_w_guide', 1.5),
+        quality_guide_scale=getattr(args, 'quality_guide_scale', 0.35),
     )
 
     
@@ -449,7 +495,12 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             task_type = 'wipe'
             task_config = load_wipe_task_config()
             task_config["num_markers"] = args.num_markers
-            task_config["use_condensed_obj_obs"] = True
+            task_config["use_condensed_obj_obs"] = False
+            if getattr(args, 'use_quality_reward', False):
+                task_config["wipe_contact_reward"] = 0.0
+                task_config["distance_multiplier"] = 0.0
+                task_config["distance_th_multiplier"] = 0.0
+                task_config["excess_force_penalty_mul"] = 0.0
             task_metrics = wipe_task_metrics_fn
         elif 'nutassembly' in env_lower:
             task_type = 'nutassembly'
@@ -504,10 +555,10 @@ def make_env(args, is_eval=False, rank=0, seed=0):
                     tilt_min_deg=38.0,
                     tilt_max_deg=52.0,
                     size_scale_min=0.7,
-                    randomize_friction=False,
+                    randomize_friction=True,
                 )
             if getattr(args, 'primitive_init', 'none') in ('teleport', 'both'):
-                env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.30)
+                env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.15, is_eval=is_eval)
         
         # ✅ Auto-select profile: VLM overrides, then env-specific defaults
         llm_profile_path = args.llm_profile
@@ -518,7 +569,7 @@ def make_env(args, is_eval=False, rank=0, seed=0):
                 llm_profile_path = "configs/door_impedance_profile.yaml"
             elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
                 # Auto-select Wipe profile (was missing here — caused NAS profile to be used in eval!)
-                llm_profile_path = "configs/wipe_impedance_profile_v2.yaml"
+                llm_profile_path = "configs/wipe_impedance_profile_HQ.yaml"
 
         if task_type == 'wipe':
             stiffness_penalty = 0.002
@@ -538,12 +589,14 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             env=env,
             stiffness_penalty=stiffness_penalty,
             success_bonus=success_bonus,
+            early_terminate_on_success=getattr(args, 'early_terminate', False),
             use_spd_manifold=args.use_spd,
             use_lie_group=args.use_lie,
             use_diag_manifold=args.use_diag,
             use_fixed=args.use_fixed,
             is_eval=is_eval,
             use_llm_prior=args.use_llm_prior,
+            use_ema=args.use_ema,
             llm_backend=args.llm_backend,
             llm_model=args.vlm_model if args.use_vlm else args.llm_model,
             llm_query_interval=args.llm_query_interval,
@@ -555,6 +608,16 @@ def make_env(args, is_eval=False, rank=0, seed=0):
             task_type=task_type,
             task_metrics_fn=task_metrics,
             use_vision=args.use_vlm,
+            add_prior_obs=getattr(args, 'add_prior_obs', False),
+            use_quality_reward=getattr(args, 'use_quality_reward', False),
+            use_sequential_waypoints=getattr(args, 'use_sequential_waypoints', True),
+            quality_f_target=getattr(args, 'quality_f_target', 15.0),
+            quality_sigma=getattr(args, 'quality_sigma', 15.0),
+            quality_r_checkpoint=getattr(args, 'quality_r_checkpoint', 0.08),
+            quality_w_con=getattr(args, 'quality_w_con', 1.5),
+            quality_w_force=getattr(args, 'quality_w_force', 2.0),
+            quality_w_guide=getattr(args, 'quality_w_guide', 1.5),
+            quality_guide_scale=getattr(args, 'quality_guide_scale', 0.35),
         )
 
         # ── Seeding ──────────────────────────────────────────────────────────
@@ -654,7 +717,7 @@ def main():
         elif 'door' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
             args.llm_profile = "configs/door_impedance_profile.yaml"
         elif 'wipe' in env_lower and args.llm_profile == "configs/nutassembly_robosuite_impedance_profile.yaml":
-            args.llm_profile = "configs/wipe_impedance_profile_v2.yaml"
+            args.llm_profile = "configs/wipe_impedance_profile_HQ.yaml"
 
     set_random_seed(args.seed)
 
@@ -679,36 +742,54 @@ def main():
     env = SubprocVecEnv(env_fns)
     env = VecMonitor(env)
 
-    model = SAC(
-        "MlpPolicy",
-        env,
-        verbose=1,
-        tensorboard_log=f"./outputs/logs/{run_name}",
-        learning_rate=args.lr,
-        batch_size=args.batch_size,
-        buffer_size=1_000_000,
-        tau=0.002,                  # For soft updates of the target network
-        target_entropy="auto",      # Encourage exploration (tune based on action space)
-        gamma=args.gamma,           # default 0.99
-        train_freq=1,               # Train every step
-        gradient_steps=args.n_envs, # 1 update per new sample (matches n_envs parallel envs)
-        use_sde=False,              # Smooth robotic noise
-        # sde_sample_freq=8,
-        seed=args.seed,
-        device=device
-    )
-
-    # ── Gradient clipping hooks ──────────────────────────────────────────────
-    # The SPD/GRL manifold mapping (matrix exponential) can produce large
-    # gradient magnitudes during Q-overestimation events late in training,
-    # causing catastrophic policy collapse. Element-wise clamping to ±1.0
-    # prevents these spikes from corrupting the weights without slowing
-    # learning (unlike reducing gradient_steps or LR).
-    # Applied to all configs for consistency — Euclidean runs also benefit.
-    # _GRAD_CLIP = 1.0
-    # for param in model.policy.parameters():
-    #     if param.requires_grad:
-            # param.register_hook(lambda g: torch.clamp(g, -_GRAD_CLIP, _GRAD_CLIP))
+    if args.load_model:
+        print(f"Loading existing model from {args.load_model}")
+        
+        # Use command-line learning rate if specified, otherwise default to a safe 2e-5
+        custom_objects = {
+            "learning_rate": args.lr if getattr(args, "lr", None) is not None else 2e-5,
+        }
+        
+        model = SAC.load(
+            args.load_model, 
+            env=env,
+            tensorboard_log=f"./outputs/logs/{run_name}",
+            device=device,
+            buffer_size=1_000_000,
+            custom_objects=custom_objects
+        )
+        
+        # --- CRITICAL FIX: Buffer Warmup ---
+        # SAC will start with an empty 1M buffer. If we train immediately, it will overfit
+        # to the first 100 transitions in the batch, causing gradients to explode and ruining
+        # the weights. We must run the current policy for a while with NO updates to fill the buffer.
+        print("Warming up fresh replay buffer with 50,000 steps of current policy...")
+        original_grad_steps = model.gradient_steps
+        model.gradient_steps = 0  # Disable learning
+        model.learn(total_timesteps=50_000, reset_num_timesteps=False)
+        print(f"Buffer warmed up. Buffer size: {model.replay_buffer.pos}")
+        
+        # Re-enable learning
+        model.gradient_steps = original_grad_steps
+    else:
+        model = SAC(
+            "MlpPolicy",
+            env,
+            verbose=1,
+            tensorboard_log=f"./outputs/logs/{run_name}",
+            learning_rate=args.lr,
+            batch_size=args.batch_size,
+            buffer_size=1_000_000,
+            tau=0.002,                  # For soft updates of the target network
+            target_entropy="auto",      # Encourage exploration (tune based on action space)
+            gamma=args.gamma,           # default 0.99
+            train_freq=1,               # Train every step
+            gradient_steps=args.n_envs, # 1 update per new sample (matches n_envs parallel envs)
+            use_sde=False,              # Smooth robotic noise
+            # sde_sample_freq=8,
+            seed=args.seed,
+            device=device
+        )
 
     eval_callback = setup_evaluation_callback(args, run_name)
     
@@ -743,7 +824,10 @@ def main():
 
     from hires_vic.utils.callbacks import GammaCurriculumCallback
     gamma_callback = None
-    if getattr(args, 'gamma_start', None) is not None:
+    
+    # ── Dynamic Gamma Curriculum ──────────────────────────────────────────────
+    if getattr(args, 'gamma_start', None) is not None and not args.load_model:
+        # Standard curriculum for from-scratch training
         anneal_end = args.total_timesteps // 2   # reach gamma_end by 50% of training
         gamma_callback = GammaCurriculumCallback(
             gamma_start=args.gamma_start,
@@ -753,6 +837,20 @@ def main():
             verbose=1,
         )
         print(f"Γ Gamma curriculum: {args.gamma_start} → {args.gamma} over {anneal_end:,} steps")
+    elif args.load_model and model.gamma < args.gamma:
+        # Fine-tuning curriculum: The loaded checkpoint might have been saved early
+        # during the original curriculum (e.g. gamma=0.96). Instantly assigning 0.9933
+        # would shock the Q-values. Instead, we smoothly anneal from its saved gamma!
+        loaded_gamma = model.gamma
+        anneal_end = args.total_timesteps // 2
+        gamma_callback = GammaCurriculumCallback(
+            gamma_start=loaded_gamma,
+            gamma_end=args.gamma,
+            anneal_start_steps=0,
+            anneal_end_steps=anneal_end,
+            verbose=1,
+        )
+        print(f"Γ Resuming Gamma curriculum: loaded {loaded_gamma:.4f} → {args.gamma:.4f} over {anneal_end:,} steps")
 
     # 6. Train!
     print(f"Starting training for {args.total_timesteps} steps...")
@@ -762,11 +860,21 @@ def main():
     if gamma_callback is not None:
         callbacks.append(gamma_callback)
 
-    model.learn(
-        total_timesteps=args.total_timesteps,
-        callback=callbacks,
-        reset_num_timesteps=False
-    )
+    if args.load_model:
+        # Subtract the warmup steps from the total
+        remaining_timesteps = max(0, args.total_timesteps - 50_000)
+        print(f"Starting fine-tuning for remaining {remaining_timesteps} steps...")
+        model.learn(
+            total_timesteps=remaining_timesteps,
+            callback=callbacks,
+            reset_num_timesteps=False
+        )
+    else:
+        model.learn(
+            total_timesteps=args.total_timesteps,
+            callback=callbacks,
+            reset_num_timesteps=True
+        )
 
     # 7. Save final model and cleanup
     model.save(f"./outputs/models/{run_name}_final")

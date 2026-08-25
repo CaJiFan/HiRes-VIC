@@ -68,8 +68,18 @@ export OLLAMA_MODELS="/home/cjimenez/ollama_models"
 UNIQUE_PORT=$((11000 + (SLURM_JOB_ID % 1000)))
 export OLLAMA_HOST="127.0.0.1:${UNIQUE_PORT}"
 
+# Setup cleanup trap for Ollama if started
+cleanup() {
+    if [ -n "$OLLAMA_PID" ]; then
+        echo "Stopping background Ollama server (PID $OLLAMA_PID)..."
+        kill "$OLLAMA_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
 # echo "Starting Ollama server on port ${UNIQUE_PORT}..."
 # ~/.local/bin/ollama serve &
+# OLLAMA_PID=$!
 # sleep 10
 
 check_ollama() {
@@ -153,38 +163,47 @@ run_llm() {
 # fi
 # echo "✅ Ollama OK — proceeding."
 
+TRAIN_PIDS=()
+
 for SEED in "${SEEDS[@]}"; do
     echo "════════════════  SEED ${SEED}  ════════════════"
 
     wait_for_queue
     run_geo "FALSE" "FALSE" "FALSE" "NAS_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     wait_for_queue
     run_geo "FALSE" "FALSE" "TRUE"  "NAS_DIAG_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     wait_for_queue
     run_geo "TRUE"  "FALSE" "FALSE" "NAS_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     wait_for_queue
     run_geo "FALSE" "TRUE"  "FALSE" "NAS_LIE_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     wait_for_queue
     run_geo "TRUE"  "TRUE"  "FALSE" "NAS_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     # wait_for_queue
     # run_llm "FALSE"  "FALSE" "NAS_BASELINE_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # wait_for_queue
     # run_llm "TRUE"  "FALSE" "NAS_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # wait_for_queue
     # run_llm "TRUE"  "TRUE"  "NAS_FULL_GRL_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
+    # TRAIN_PIDS+=($!)
     
-    # Wait for all 9 jobs of the current seed to finish before moving to the next seed
-    # wait
 done
 
-wait
+# Wait ONLY for all RL training processes to finish
+wait "${TRAIN_PIDS[@]}"
 
-echo "��  All NutAssemblySquare experiments complete!"
+echo "🎉  All NutAssemblySquare experiments complete!"
 conda deactivate

@@ -36,13 +36,15 @@ class WipeTeleportWrapper(gym.Wrapper):
         self,
         env,
         tilt_angle_deg: float = 45.0,
-        hover_dist: float = 0.30,
+        hover_dist: float = 0.15,
         table_body_name: str = "table",
+        is_eval: bool = False,
     ):
         super().__init__(env)
         self.tilt_angle_deg = tilt_angle_deg
         self.hover_dist = hover_dist
         self.table_body_name = table_body_name
+        self.is_eval = is_eval
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -72,9 +74,6 @@ class WipeTeleportWrapper(gym.Wrapper):
         try:
             body_id = sim.model.body_name2id(self.table_body_name)
             table_centre = np.array(sim.data.body_xpos[body_id], dtype=float)
-            # The table centroid is at half-thickness below the surface;
-            # add half the table thickness along the (untilted) Z to reach surface.
-            # We keep it simple and trust hover_dist to cover the slack.
             hover_target = table_centre + self.hover_dist * normal
             print(
                 f"[WipeTeleport] Sim-based hover target: {hover_target} "
@@ -85,8 +84,6 @@ class WipeTeleportWrapper(gym.Wrapper):
             print(f"[WipeTeleport] Sim-based table lookup failed ({e}), using config fallback.")
 
         # --- 2. Config fallback: use known table_offset from task_config -
-        # DEFAULT: table_offset=[0.15, 0, 0.9], table_full_size=[0.5, 0.8, 0.05]
-        # Surface centre z = 0.9 + 0.025 = 0.925
         table_centre_fallback = np.array([0.15, 0.0, 0.925])
         hover_target = table_centre_fallback + self.hover_dist * normal
         print(f"[WipeTeleport] Config-fallback hover target: {hover_target}")
@@ -140,63 +137,85 @@ class WipeTeleportWrapper(gym.Wrapper):
             print(f"[WipeTeleport] Joint address lookup failed: {e}. Skipping teleport.")
             return False
 
-        # Jacobian-based one-step IK
+        # Site-based Jacobian IK for accurate EEF positioning
         try:
-            # Get Jacobian: shape (3, n_dof) for translational part
-            # MuJoCo sim.data.get_body_jacp returns a flat (3*nv,) array
-            nv = sim.model.nv
-            jacp = np.zeros((3, nv))
-            jacr = np.zeros((3, nv))
-
-            # Find EEF body id (Robosuite names it robot0_right_hand or similar)
-            eef_body_candidates = [
-                "robot0_right_hand", "robot0_eef", "right_hand", "eef"
+            site_candidates = [
+                "gripper0_right_grip_site", "robot0_right_center", "right_eef", "eef", "gripper0_right_eef"
             ]
-            eef_body_id = None
-            for name in eef_body_candidates:
+            eef_site_id = None
+            for name in site_candidates:
                 try:
-                    eef_body_id = sim.model.body_name2id(name)
+                    eef_site_id = sim.model.site_name2id(name)
                     break
                 except Exception:
                     continue
 
-            if eef_body_id is None:
-                # Last resort: scan all bodies for one containing 'hand'
-                for i in range(sim.model.nbody):
-                    bname = sim.model.body_id2name(i)
-                    if "hand" in bname.lower() and "robot" in bname.lower():
-                        eef_body_id = i
-                        break
+            # Target 6D pose: 3D position + 45-degree pitch orientation parallel to tilted table surface
+            from scipy.spatial.transform import Rotation as R
+            tilt_rad = np.radians(self.tilt_angle_deg)
+            r_y = R.from_euler('y', tilt_rad).as_matrix()
+            base_rot = np.array([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+            target_rot = r_y @ base_rot
 
+            # Multi-iteration Jacobian IK to accurately reach target hover position & orientation
+            for _ in range(35):
+                sim.forward()
+                if eef_site_id is not None:
+                    current_eef = sim.data.site_xpos[eef_site_id].copy()
+                    current_rot = sim.data.site_xmat[eef_site_id].reshape(3, 3)
+                else:
+                    raw_obs = self.env.unwrapped._get_observations()
+                    current_eef = np.array(raw_obs["robot0_eef_pos"], dtype=float)
+                    current_rot = target_rot.copy()
+
+                delta_pos = target_pos - current_eef
+                
+                # Orientation error vector (so3)
+                rot_err_mat = target_rot @ current_rot.T
+                r_err = R.from_matrix(rot_err_mat).as_rotvec()
+                
+                delta = np.hstack([delta_pos, r_err])
+                if np.linalg.norm(delta_pos) < 0.003 and np.linalg.norm(r_err) < 0.05:
+                    break
+
+                nv = sim.model.nv
+                jacp = np.zeros((3, nv))
+                jacr = np.zeros((3, nv))
+
+                if eef_site_id is not None:
+                    mujoco.mj_jacSite(sim.model._model, sim.data._data, jacp, jacr, eef_site_id)
+                else:
+                    body_id = sim.model.body_name2id("robot0_right_hand")
+                    mujoco.mj_jacBody(sim.model._model, sim.data._data, jacp, jacr, body_id)
+
+                J = np.vstack([jacp[:, qpos_indices], jacr[:, qpos_indices]])  # (6, 7)
+                damping = 0.02
+                JJT = J @ J.T + damping ** 2 * np.eye(6)
+                dq = J.T @ np.linalg.solve(JJT, delta)
+                dq = np.clip(dq, -0.15, 0.15)
+
+                current_qpos = np.array(sim.data.qpos[qpos_indices])
+                sim.data.qpos[qpos_indices] = current_qpos + dq
+                sim.forward()
+
+            # Synchronise Robosuite OSC controller's internal goal state with new teleported pose
             try:
-                # Newer mujoco versions (e.g. >= 3)
-                mujoco.mj_jacBody(sim.model._model, sim.data._data, jacp, jacr, eef_body_id)
-            except AttributeError:
-                try:
-                    # Older mujoco versions (e.g. 2.x via mujoco_py)
-                    sim.data.get_body_jacp(sim.model._model, eef_body_id, jacp)
-                    sim.data.get_body_jacr(sim.model._model, eef_body_id, jacr)
-                except TypeError:
-                    sim.data.get_body_jacp(eef_body_id, jacp.ravel())
-                    sim.data.get_body_jacr(eef_body_id, jacr.ravel())
-
-            # Extract columns corresponding to our arm joints
-            J = jacp[:, qpos_indices]  # (3, 7)
-
-            delta_pos = target_pos - current_eef
-            # Damped least-squares pseudo-inverse
-            damping = 0.05
-            JJT = J @ J.T + damping ** 2 * np.eye(3)
-            dq = J.T @ np.linalg.solve(JJT, delta_pos)
-
-            # Clamp the delta to avoid huge jumps (max 0.5 rad per joint)
-            dq = np.clip(dq, -0.5, 0.5)
-
-            # Apply delta to qpos
-            current_qpos = np.array(sim.data.qpos[qpos_indices])
-            new_qpos = current_qpos + dq
-
-            sim.data.qpos[qpos_indices] = new_qpos
+                raw_env = self.env.unwrapped
+                for robot in getattr(raw_env, "robots", []):
+                    if hasattr(robot, "composite_controller"):
+                        for part, part_ctrl in robot.composite_controller.part_controllers.items():
+                            if hasattr(part_ctrl, "goal_pos"):
+                                if eef_site_id is not None:
+                                    part_ctrl.goal_pos = sim.data.site_xpos[eef_site_id].copy()
+                                else:
+                                    part_ctrl.goal_pos = target_pos.copy()
+                            if hasattr(part_ctrl, "goal_ori"):
+                                if eef_site_id is not None:
+                                    part_ctrl.goal_ori = sim.data.site_xmat[eef_site_id].reshape((3, 3)).copy()
+                            if hasattr(part_ctrl, "update"):
+                                part_ctrl.update()
+            except Exception as e:
+                print(f"[WipeTeleport] Could not update controller goal_pos: {e}")
 
         except Exception as e:
             print(f"[WipeTeleport] Jacobian IK failed: {e}. Skipping teleport.")

@@ -32,18 +32,22 @@ mkdir -p logs/door
 
 # ── Fixed hypers ──────────────────────────────────────────────────────────────
 TASK="Door"
-STEPS=1_000_000
-HORIZON=300
-N_ENVS=8
-GAMMA=0.99
-SEEDS=(1 2 3)
+STEPS=1000000
+HORIZON=100
+N_ENVS=16
+LR=3e-4
+BATCH_SIZE=1024
+GAMMA=0.95
+GAMMA_START=0.95 
+SEEDS=(0 1 2 3 4)
 
 # ── LLM prior schedule ────────────────────────────────────────────────────────
 # Anneal from W_INIT → W_FLOOR over the first 75% of per-env steps.
 # Per-env steps ≈ STEPS / N_ENVS = 125,000. 75% of that = 93,750.
-LLM_W_INIT=0.7
-LLM_W_FLOOR=0.05
-LLM_ANNEAL=$((STEPS * 75 / 100 / N_ENVS))   # = 93,750
+LLM_W_INIT=0.4
+LLM_W_FLOOR=$LLM_W_INIT
+# LLM_ANNEAL=$((STEPS * 75 / 100 / N_ENVS))   # = 93,750
+LLM_ANNEAL=0
 LLM_BACKEND="ollama"
 LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=50
@@ -83,10 +87,14 @@ run_geo() {
         --total_timesteps "$STEPS"
         --horizon "$HORIZON"
         --n_envs "$N_ENVS"
+        --lr "$LR"
+        --batch_size "$BATCH_SIZE"
         --gamma "$GAMMA"
+        --gamma_start "$GAMMA_START"
         --seed "$SEED"
-        --camera_names "frontview,robot0_eye_in_hand"
+        --camera_names "frontview"
         --primitive_init none
+        --record_video
     )
     [ "$USE_SPD"  == "TRUE" ] && ARGS+=(--use_spd)
     [ "$USE_LIE"  == "TRUE" ] && ARGS+=(--use_lie)
@@ -161,30 +169,30 @@ for SEED in "${SEEDS[@]}"; do
     run_geo "TRUE"  "TRUE"  "FALSE" "DOOR_FULL_GRL_G${GAMMA}" "$SEED"
 done
 
-# ── Section B: Geometric + LLM prior ─────────────────────────────────────────
-echo ""
-echo "██████████████  SECTION B: Geometric + LLM Prior  ██████████████"
-echo ""
-echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
-if ! check_ollama; then
-    echo "❌ Ollama not responding. Skipping Section B."
-    echo "   To run LLM configs later: bash scripts/run_Door_llm_only.sh"
-    echo ""
-else
-    echo "✅ Ollama OK — proceeding with LLM runs."
-    echo ""
+# # ── Section B: Geometric + LLM prior ─────────────────────────────────────────
+# echo ""
+# echo "██████████████  SECTION B: Geometric + LLM Prior  ██████████████"
+# echo ""
+# echo "Checking Ollama availability at ${OLLAMA_HOST} ..."
+# if ! check_ollama; then
+#     echo "❌ Ollama not responding. Skipping Section B."
+#     echo "   To run LLM configs later: bash scripts/run_Door_llm_only.sh"
+#     echo ""
+# else
+#     echo "✅ Ollama OK — proceeding with LLM runs."
+#     echo ""
 
-    for SEED in "${SEEDS[@]}"; do
-        echo ""
-        echo "════════════════  SEED ${SEED}  ════════════════"
+#     for SEED in "${SEEDS[@]}"; do
+#         echo ""
+#         echo "════════════════  SEED ${SEED}  ════════════════"
 
-        # 5. SPD + LLM — SPD manifold with annealed semantic prior
-        run_llm "TRUE"  "FALSE" "DOOR_SPD_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED"
+#         # 5. SPD + LLM — SPD manifold with annealed semantic prior
+#         run_llm "TRUE"  "FALSE" "DOOR_SPD_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED"
 
-        # 6. FULL_GRL + LLM — SPD + SO(3) + LLM prior
-        run_llm "TRUE"  "TRUE"  "DOOR_FULL_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED"
-    done
-fi
+#         # 6. FULL_GRL + LLM — SPD + SO(3) + LLM prior
+#         run_llm "TRUE"  "TRUE"  "DOOR_FULL_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED"
+#     done
+# fi
 
 echo ""
 echo "🎉  All Door experiments complete!"

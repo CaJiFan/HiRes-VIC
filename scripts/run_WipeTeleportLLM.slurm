@@ -1,12 +1,12 @@
 #!/bin/bash
 #
 # --- Slurm Configuration ---
-#SBATCH --job-name=wipev2_tsam
-#SBATCH --output=logs/wipev2_ec_llm_%j.txt
-#SBATCH --error=logs/wipev2_ec_llm_%j.err
+#SBATCH --job-name=wipev0.7
+#SBATCH --output=logs/wipev0.7_%j.txt
+#SBATCH --error=logs/wipev0.7_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=80
+#SBATCH --cpus-per-task=96
 #SBATCH --mem=120G
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:lovelace:1
@@ -46,21 +46,22 @@ export MALLOC_ARENA_MAX=1
 
 # ── Fixed hypers ──────────────────────────────────────────────────────────────
 TASK="TiltedWipe"
-STEPS=2000000
+STEPS=1000000
 HORIZON=150
 N_ENVS=16
-# GAMMA=0.95
-GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
-NUM_MARKERS=50
-SEEDS=(0 1 2 4 3)
-LR=1e-4            # lowered from 3e-4 to prevent stability drops on the impedance manifold
+GAMMA=0.95
+# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+NUM_MARKERS=5
+SEEDS=(0 1 2 3 4)
+LR=3e-4            # lowered from 3e-4 to prevent stability drops on the impedance manifold
 BATCH_SIZE=1024    # increased from 512 for smoother gradient steps
 GAMMA_START=0.95   # curriculum: start here, anneal to GAMMA by 50% of training
 
 
 # ── LLM-related hparams ────────────────────────────────────────────────────────
-LLM_W_INIT=0.50              
-LLM_W_FLOOR=0.50            
+LLM_W_INIT=0.70
+# LLM_W_FLOOR=0.50
+LLM_W_FLOOR=$LLM_W_INIT            
 LLM_ANNEAL_SCHEDULE="cosine"
 # LLM_ANNEAL=$((STEPS * 50 / 100 / N_ENVS))
 LLM_ANNEAL=0
@@ -79,6 +80,8 @@ wait_for_queue() {
 export OLLAMA_MODELS="/home/cjimenez/ollama_models"
 UNIQUE_PORT=$((11000 + (SLURM_JOB_ID % 1000)))
 export OLLAMA_HOST="127.0.0.1:${UNIQUE_PORT}"
+export OLLAMA_NUM_PARALLEL=5
+export OLLAMA_MAX_LOADED_MODELS=1
 
 OLLAMA_RESPONSE=""
 check_ollama() {
@@ -120,6 +123,8 @@ run_llm() {
         --record_video
         --camera_names "frontview"
         --primitive_init "teleport" # Enable the teleport wrapper
+        --use_quality_reward        # Checkpoint-gated quality reward (arXiv:2502.12599)
+        --use_sequential_waypoints
         # LLM prior flags
         --use_llm_prior
         --llm_backend "$LLM_BACKEND"
@@ -144,6 +149,16 @@ run_llm() {
 if [ "$LLM_BACKEND" == "ollama" ]; then
     echo "Starting Ollama server on port ${UNIQUE_PORT}..."
     ~/.local/bin/ollama serve &
+    OLLAMA_PID=$!
+
+    # Clean up Ollama on script exit, interruption, or job cancellation
+    cleanup() {
+        if [ -n "$OLLAMA_PID" ]; then
+            echo "Stopping background Ollama server (PID $OLLAMA_PID)..."
+            kill "$OLLAMA_PID" 2>/dev/null || true
+        fi
+    }
+    trap cleanup EXIT INT TERM
     sleep 5
 
     echo "Pulling model ${LLM_MODEL} (if not already downloaded)..."
@@ -166,25 +181,25 @@ else
     fi
 fi
 
+TRAIN_PIDS=()
+
 for SEED in "${SEEDS[@]}"; do
     echo "════════════════  SEED ${SEED}  ════════════════"
 
     # # BASELINE with LLM
     # wait_for_queue
-    # run_llm "FALSE" "FALSE" "FALSE" "WIPE_ICRA_BASELINE_LLMv2_QWEN_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_LOGMULTI_FIXED" "$SEED" &
-
-    # # DIAG with LLM
-    # wait_for_queue
-    # run_llm "FALSE" "FALSE" "TRUE" "WIPE_ICRA_DIAG_NEWLLM_LLAMA_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_LOGMULTI_FIXED" "$SEED" &
+    # run_llm "FALSE" "FALSE" "FALSE" "WIPE_ICRA_BASELINE_LLMv4_LLAMA_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_LOGEUC_GEOBOUND" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # SPD with LLM
     wait_for_queue
-    run_llm "TRUE"  "FALSE" "FALSE" "WIPE_ICRA_SPD_LLMv2_LLAMA_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_TSAM" "$SEED" &
-
+    run_llm "TRUE"  "FALSE" "FALSE" "WIPE_ICRA_SPD_LLMv4_LLAMA_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_LOGEUC_GEOBOUND" "$SEED" &
+    TRAIN_PIDS+=($!)
 
 done
 
-wait
+# Wait ONLY for all RL training processes to finish
+wait "${TRAIN_PIDS[@]}"
 
 echo ""
 echo "🎉  All TiltedWipe Teleport experiments complete!"

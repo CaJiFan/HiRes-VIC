@@ -29,6 +29,15 @@ export OLLAMA_HOST="127.0.0.1:${UNIQUE_PORT}"
 
 echo "Starting Ollama server on port ${UNIQUE_PORT}..."
 ~/.local/bin/ollama serve &
+OLLAMA_PID=$!
+
+cleanup() {
+    if [ -n "$OLLAMA_PID" ]; then
+        echo "Stopping background Ollama server (PID $OLLAMA_PID)..."
+        kill "$OLLAMA_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
 
 # Wait for the server to fully initialize
 sleep 10

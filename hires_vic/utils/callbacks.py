@@ -69,19 +69,27 @@ class RobosuiteLoggingCallback(BaseCallback):
                     for m, pct in mode_pcts.items():
                         self.logger.record(f"llm/pct_{m}", pct)
 
-                    wandb.log({
-                        "llm/episode_mode_distribution": wandb.plot.bar(
-                            wandb.Table(
-                                columns=["mode", "fraction"],
-                                data=[[m, pct] for m, pct in mode_pcts.items()]
-                            ),
-                            "mode", "fraction",
-                            title="LLM Mode Distribution (this episode)"
-                        ),
-                        "llm/dominant_mode_int": self._mode_to_int.get(
-                            max(counts, key=counts.get) if counts else self._modes[0], 0
-                        ),
-                    }, step=self.num_timesteps, commit=False)
+                    # Throttle heavy wandb.Table artifacts to avoid filesystem / disk quota exhaustion
+                    dominant_int = self._mode_to_int.get(
+                        max(counts, key=counts.get) if counts else self._modes[0], 0
+                    )
+                    log_dict = {"llm/dominant_mode_int": dominant_int}
+                    if idx == 0 and (self.num_timesteps % 5000 < 50):
+                        try:
+                            log_dict["llm/episode_mode_distribution"] = wandb.plot.bar(
+                                wandb.Table(
+                                    columns=["mode", "fraction"],
+                                    data=[[m, pct] for m, pct in mode_pcts.items()]
+                                ),
+                                "mode", "fraction",
+                                title="LLM Mode Distribution (this episode)"
+                            )
+                        except Exception:
+                            pass
+                    try:
+                        wandb.log(log_dict, step=self.num_timesteps, commit=False)
+                    except Exception:
+                        pass
 
                     for m in self._modes:
                         forces = self._mode_force[idx][m]
@@ -95,6 +103,8 @@ class RobosuiteLoggingCallback(BaseCallback):
                 # ── Standard episode-end physics / smoothness metrics ────────
                 if "success" in info:
                     self.logger.record("rollout/success_rate", float(info["success"]))
+                elif "is_success" in info:
+                    self.logger.record("rollout/success_rate", float(info["is_success"]))
 
                 _METRIC_KEYS = [
                     ("smoothness/avg_cond_num",           "smoothness/avg_cond_num"),
@@ -343,10 +353,20 @@ class VideoRecorderCallback(BaseCallback):
         step_reward = 0.0
         step_success = False
         while not done:
-            # Capture frame and annotate with step-level reward + success state
+            # Query physical table contact status
+            has_contact = False
+            try:
+                unwrapped = self.video_env.unwrapped
+                if hasattr(unwrapped, "check_contact") and hasattr(unwrapped, "robots"):
+                    gripper_geoms = unwrapped.robots[0].gripper['right'].contact_geoms
+                    has_contact = unwrapped.check_contact(gripper_geoms, "table_collision")
+            except Exception:
+                pass
+
+            # Capture frame and annotate with step-level reward, success state, and contact status
             frame = self._capture_frame()
             if frame is not None:
-                frame = self._annotate_frame(frame, step_reward, step_success)
+                frame = self._annotate_frame(frame, step_reward, step_success, contact=has_contact)
                 frames.append(frame)
 
             # Predict action
@@ -377,7 +397,15 @@ class VideoRecorderCallback(BaseCallback):
         # final environment state here and annotate it correctly.
         final_frame = self._capture_frame()
         if final_frame is not None:
-            final_frame = self._annotate_frame(final_frame, step_reward, step_success)
+            has_contact = False
+            try:
+                unwrapped = self.video_env.unwrapped
+                if hasattr(unwrapped, "check_contact") and hasattr(unwrapped, "robots"):
+                    gripper_geoms = unwrapped.robots[0].gripper['right'].contact_geoms
+                    has_contact = unwrapped.check_contact(gripper_geoms, "table_collision")
+            except Exception:
+                pass
+            final_frame = self._annotate_frame(final_frame, step_reward, step_success, contact=has_contact)
             frames.append(final_frame)
             # If success was achieved, hold the SUCCESS frame for 3 extra frames
             # so it's clearly visible when scrubbing / watching the video.
@@ -497,18 +525,24 @@ class VideoRecorderCallback(BaseCallback):
         if not isinstance(raw_obs, dict):
             return None
 
-        # Look for end-effector and scene cameras
-        eef_img = None
-        scene_img = None
-
+        # Collect all available camera image arrays from raw_obs
+        available_imgs = []
         for k, v in raw_obs.items():
-            k_lower = k.lower()
-            # End-effector camera: "wrist", "eye_in_hand", "robot0_eye_in_hand", "eef"
-            if any(x in k_lower for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in k_lower:
-                eef_img = v
-            # Scene camera: "frontview", "agentview", "birdview"
-            if any(x in k_lower for x in ('frontview', 'agentview', 'birdview')) and 'image' in k_lower:
-                scene_img = v
+            if 'image' in k.lower() and isinstance(v, np.ndarray) and v.ndim == 3:
+                available_imgs.append((k, v))
+
+        if len(available_imgs) >= 2:
+            eef_img = available_imgs[0][1]
+            scene_img = available_imgs[1][1]
+        else:
+            eef_img = None
+            scene_img = None
+            for k, v in raw_obs.items():
+                k_lower = k.lower()
+                if any(x in k_lower for x in ('wrist', 'eye_in_hand', 'eef')) and 'image' in k_lower:
+                    eef_img = v
+                if any(x in k_lower for x in ('frontview', 'agentview', 'birdview', 'sideview')) and 'image' in k_lower:
+                    scene_img = v
 
         # If we have both cameras, normalize and force same shape
         if eef_img is not None and scene_img is not None:
@@ -597,11 +631,12 @@ class VideoRecorderCallback(BaseCallback):
         except Exception:
             return None
 
-    def _annotate_frame(self, frame: np.ndarray, reward: float, success: bool) -> np.ndarray:
-        """Overlay per-step reward and success state onto a video frame.
+    def _annotate_frame(self, frame: np.ndarray, reward: float, success: bool, contact: bool = False) -> np.ndarray:
+        """Overlay per-step reward, success state, and contact status onto a video frame.
 
         Draws a small semi-transparent banner at the top of the frame with:
           • Reward: {value}   (green if positive, red if negative)
+          • Contact: YES/NO
           • SUCCESS or RUNNING badge
 
         Falls back to the unmodified frame if cv2 is unavailable.
@@ -628,6 +663,12 @@ class VideoRecorderCallback(BaseCallback):
             rew_color = (80, 220, 80) if reward >= 0 else (80, 80, 220)  # BGR: green / red
             rew_text  = f"Reward: {reward:+.3f}"
             cv2.putText(frame, rew_text, (pad, text_y), font, font_scale, rew_color, thickness, cv2.LINE_AA)
+
+            # ── contact status text ──────────────────────────────────────────
+            contact_color = (80, 220, 80) if contact else (180, 180, 180)  # BGR: green / grey
+            contact_text  = f"Contact: {'YES' if contact else 'NO'}"
+            (cw, _), _ = cv2.getTextSize(contact_text, font, font_scale, thickness)
+            cv2.putText(frame, contact_text, ((w - cw) // 2, text_y), font, font_scale, contact_color, thickness, cv2.LINE_AA)
 
             # ── success badge ────────────────────────────────────────────────
             if success:

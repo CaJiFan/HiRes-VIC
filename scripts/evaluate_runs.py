@@ -24,7 +24,7 @@ import gymnasium as gym
 
 from hires_vic import envs
 from hires_vic.envs.riemannian_controller import RiemannianController
-from hires_vic.wrappers import GeometricWrapper, RobosuiteTeleportWrapper
+from hires_vic.wrappers import GeometricWrapper, RobosuiteTeleportWrapper, WipeTeleportWrapper, WipeDomainRandomizationWrapper
 
 factory.arm_controllers.OperationalSpaceController = RiemannianController
 
@@ -173,7 +173,7 @@ def make_env(env_name, config_name, model_path=None):
         elif "Door" in env_name:
             profile_path = "configs/door_impedance_profile.yaml"
         elif "TiltedWipe" in env_name:
-            profile_path = "configs/wipe_impedance_profile.yaml"
+            profile_path = "configs/wipe_impedance_profile_HQ.yaml"
 
     if "BASELINE" in config_name or "VARIABLE_KP" in config_name:
         arm_config["impedance_mode"] = "variable_kp"
@@ -206,6 +206,7 @@ def make_env(env_name, config_name, model_path=None):
         "has_offscreen_renderer": True,
         "use_camera_obs": False,
         "reward_shaping": True,
+        "control_freq": 20,
         "horizon": 230 if env_name == "NutAssemblySquare" else (50 if env_name == "Door" else 150),
     }
 
@@ -214,6 +215,17 @@ def make_env(env_name, config_name, model_path=None):
 
     env = suite.make(**kwargs)
     env = GymWrapper(env)
+    
+    if "TILTED" in env_name.upper():
+        if "DOMAINRAND" in config_name:
+            env = WipeDomainRandomizationWrapper(
+                env,
+                tilt_min_deg=38.0,
+                tilt_max_deg=52.0,
+                size_scale_min=0.7,
+                randomize_friction=True,
+            )
+        env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.30)
     
     if "NutAssemblySquare" in env_name:
         env = RobosuiteTeleportWrapper(env, setup_steps=150, is_eval=True)
@@ -229,10 +241,19 @@ def make_env(env_name, config_name, model_path=None):
     task_type_str = env_name.lower()
     if 'nutassembly' in task_type_str:
         task_type_str = 'nutassembly'
+        stiffness_penalty = 0.01
+        success_bonus = 0.0
     elif 'wipe' in task_type_str:
         task_type_str = 'wipe'
+        stiffness_penalty = 0.002
+        success_bonus = 0.0
     elif 'door' in task_type_str:
         task_type_str = 'door'
+        stiffness_penalty = 0.001
+        success_bonus = 0.0
+    else:
+        stiffness_penalty = 0.0
+        success_bonus = 0.0
 
     llm_weight = 0.05 if "NutAssembly" in env_name else 0.4
     if use_llm:
@@ -243,6 +264,8 @@ def make_env(env_name, config_name, model_path=None):
 
     env = GeometricWrapper(
         env=env,
+        stiffness_penalty=stiffness_penalty,
+        success_bonus=success_bonus,
         use_spd_manifold=use_spd,
         use_lie_group=use_lie,
         use_diag_manifold=use_diag,
@@ -250,6 +273,7 @@ def make_env(env_name, config_name, model_path=None):
         is_eval=True,
         task_type=task_type_str,
         use_llm_prior=use_llm,
+        use_ema=("DOMAINRAND" in config_name) or ("EMA" in config_name),
         llm_prior_weight=llm_weight,
         llm_anneal_floor=llm_weight,
         llm_model="llama3.2",

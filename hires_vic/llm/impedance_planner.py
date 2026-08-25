@@ -84,7 +84,7 @@ def _mode_to_action_prior(kp_trans: list, kp_rot: list, use_log_space: bool) -> 
     Layout if use_spd_manifold (log_space): [m11, m22, m33, m12, m13, m23, kp_rot_x, kp_rot_y, kp_rot_z]
     Layout otherwise: [kp_trans_x, kp_trans_y, kp_trans_z, kp_rot_x, kp_rot_y, kp_rot_z]
     """
-    trans_fn = _kp_trans_to_norm_log if use_log_space else _kp_trans_to_norm_linear
+    trans_fn = _kp_trans_to_norm_linear
     
     if use_log_space:
         return np.array([
@@ -474,6 +474,12 @@ class LLMImpedancePlanner:
         if "proportion_wiped" in obs_dict:
             pw = float(obs_dict["proportion_wiped"])
             lines.append(f"Wipe completion: {pw * 100:.1f}%")
+
+        if "gripper_to_active_waypoint" in obs_dict and obs_dict["gripper_to_active_waypoint"] is not None:
+            gw = np.array(obs_dict["gripper_to_active_waypoint"], dtype=float)
+            dist_gw = float(np.linalg.norm(gw))
+            lines.append(f"Vector to active target marker (xyz): [{gw[0]:.3f}, {gw[1]:.3f}, {gw[2]:.3f}] (dist: {dist_gw:.4f} m)")
+        elif "gripper_to_wipe_centroid" in obs_dict:
             dist = float(np.linalg.norm(obs_dict.get("gripper_to_wipe_centroid", np.zeros(3))))
             lines.append(f"Distance to wipe centroid: {dist:.4f} m")
 

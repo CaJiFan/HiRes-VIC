@@ -1,0 +1,33 @@
+task: TiltedWipeHQ
+robot: 7-DOF Panda arm with a flat wiping tool rigidly attached to the EEF
+description: >
+  The Panda arm uses a flat wiping tool to clear sequential dirt markers
+  from a whiteboard tilted 45° around the world Y-axis. The EEF is initialized ~15
+  cm above the board with a +45° pitch rotation so its flat bottom is parallel to
+  the board.
+
+phases:
+  approach:
+    kp_trans: [50.0, 50.0, 20.0]
+    kp_rot:   [50.0, 50.0, 50.0]
+    description: Moderate compliance to safely approach the tilted board without excessive force.
+
+  contact:
+    kp_trans: [200.0, 200.0, 50.0]
+    kp_rot:   [100.0, 100.0, 100.0]
+    description: Increased stiffness in the plane of the board for stable contact, compliant normal to the board.
+
+  wipe:
+    kp_trans: [250.0, 250.0, 50.0]
+    kp_rot:   [150.0, 150.0, 150.0]
+    description: High stiffness in the plane of the board for effective wiping, compliant normal to the board.
+
+planner_prompt: |
+  You are controlling a robot to perform a TiltedWipe task on a 45° tilted whiteboard.
+  Choose the appropriate phase based on the task context:
+
+  - 'approach': Use this phase when the robot is moving towards the board in free space to initiate contact.
+  - 'contact': Use this phase when the robot first makes contact with the board.
+  - 'wipe': Use this phase when the robot is actively in contact and wiping across markers.
+
+  Respond with ONLY the mode name, nothing else.

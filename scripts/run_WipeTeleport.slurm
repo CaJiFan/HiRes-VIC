@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # --- Slurm Configuration ---
-#SBATCH --job-name=wipev2_eigenclamp_spd
+#SBATCH --job-name=wipev2_q
 #SBATCH --output=logs/wipev2_eigenclamp_spd_%j.txt
 #SBATCH --error=logs/wipev2_eigenclamp_spd_%j.err
 #SBATCH --nodes=1
@@ -46,14 +46,13 @@ export MALLOC_ARENA_MAX=1
 
 # ── Fixed hypers ──────────────────────────────────────────────────────────────
 TASK="TiltedWipe"
-STEPS=2000000
+STEPS=1000000
 HORIZON=150
 N_ENVS=16
-# GAMMA=0.95
-GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
-NUM_MARKERS=50
-SEEDS=(0 1 2 4 3)
-LR=1e-4            # lowered from 3e-4 to prevent stability drops on the impedance manifold
+GAMMA=0.95
+NUM_MARKERS=5
+SEEDS=(0 1 2 3 4)
+LR=3e-4            # lowered from 3e-4 to prevent stability drops on the impedance manifold
 BATCH_SIZE=1024    # increased from 512 for smoother gradient steps
 GAMMA_START=0.95   # curriculum: start here, anneal to GAMMA by 50% of training
 
@@ -80,7 +79,7 @@ LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=35
 
 wait_for_queue() {
-    while [ $(jobs -pr | wc -l) -ge 6 ]; do
+    while [ $(jobs -pr | wc -l) -ge 11 ]; do
         sleep 10
     done
 }
@@ -129,8 +128,10 @@ run_geo() {
         --lr "$LR"
         --batch_size "$BATCH_SIZE"
         --record_video
-        --camera_names "frontview"
+        --camera_names "frontview,sideview"
         --primitive_init "teleport" # Enable the teleport wrapper
+        --use_quality_reward        # Checkpoint-gated quality reward (arXiv:2502.12599)
+        --use_sequential_waypoints
     )
     [ "$USE_SPD"  == "TRUE" ] && ARGS+=(--use_spd)
     [ "$USE_LIE"  == "TRUE" ] && ARGS+=(--use_lie)
@@ -192,8 +193,18 @@ run_llm() {
     echo "  ✅ Done: ${EXP_NAME} SEED=${SEED}"
 }
 
+# Setup cleanup trap for Ollama if started
+cleanup() {
+    if [ -n "$OLLAMA_PID" ]; then
+        echo "Stopping background Ollama server (PID $OLLAMA_PID)..."
+        kill "$OLLAMA_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
 # echo "Starting Ollama server on port ${UNIQUE_PORT}..."
 # ~/.local/bin/ollama serve &
+# OLLAMA_PID=$!
 # sleep 10
 
 # echo ""
@@ -206,37 +217,46 @@ run_llm() {
 # echo "$OLLAMA_RESPONSE" | grep -o '"response":"[^"]*"'
 # echo ""
 
+TRAIN_PIDS=()
+
 for SEED in "${SEEDS[@]}"; do
     echo "════════════════  SEED ${SEED}  ════════════════"
 
     # # BASELINE — diagonal variable_kp, Euclidean obs
     # wait_for_queue
-    # run_geo "FALSE" "FALSE" "FALSE" "WIPE_ICRA_BASELINE_LR${LR}_H${HORIZON}_CURRICULUM16" "$SEED" &
+    # run_geo "FALSE" "FALSE" "FALSE" "WIPE_ICRA_BASELINE_LR${LR}_H${HORIZON}_HQSEQ_NM${NUM_MARKERS}_G${GAMMA}_NORMv1" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # # DIAG — diagonal SPD (log-scale exponential map)
     # wait_for_queue
-    # run_geo "FALSE" "FALSE" "TRUE"  "WIPE_ICRA_DIAG_LR${LR}_H${HORIZON}_CURRICULUM16" "$SEED" &
+    # run_geo "FALSE" "FALSE" "TRUE" "WIPE_ICRA_DIAG_LR${LR}_H${HORIZON}_HQSEQ_NM${NUM_MARKERS}_G${GAMMA}_NORMv2" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # SPD_ONLY — full 3×3 SPD manifold
     wait_for_queue
-    run_geo "TRUE"  "FALSE" "FALSE" "WIPE_ICRA_SPD_LR${LR}_H${HORIZON}_EIGENCLAMP16" "$SEED" &
+    run_geo "TRUE"  "FALSE" "FALSE" "WIPE_ICRA_SPD_LR${LR}_H${HORIZON}_HQSEQ_NM${NUM_MARKERS}_G${GAMMA}_NORMv1" "$SEED" &
+    TRAIN_PIDS+=($!)
 
     # # BASELINE with LLM
     # wait_for_queue
     # run_llm "FALSE" "FALSE" "FALSE" "WIPE_ICRA_BASELINE_LLM_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_CURRICULUM" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # # DIAG with LLM
     # wait_for_queue
     # run_llm "FALSE" "FALSE" "TRUE" "WIPE_ICRA_DIAG_LLM_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_CURRICULUM" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
     # # SPD with LLM
     # wait_for_queue
     # run_llm "TRUE"  "FALSE" "FALSE" "WIPE_ICRA_SPD_LLM_W${LLM_W_INIT}_LR${LR}_H${HORIZON}_CURRICULUM" "$SEED" &
+    # TRAIN_PIDS+=($!)
 
 
 done
 
-wait
+# Wait ONLY for all RL training processes to finish
+wait "${TRAIN_PIDS[@]}"
 
 echo ""
 echo "🎉  All TiltedWipe Teleport experiments complete!"

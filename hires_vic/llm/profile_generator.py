@@ -134,6 +134,41 @@ TASK_SPECS: dict[str, dict] = {
         "success_criteria": "All N dirt markers cleared within the episode horizon.",
         "suggested_phases": ["approach", "transition", "wipe"],
     },
+    "TiltedWipeHQ": {
+        "name": "TiltedWipe (Robosuite, 45° tilt)",
+        "robot": "7-DOF Panda arm with a flat wiping tool rigidly attached to the EEF",
+        "description": (
+            "The Panda arm uses a flat wiping tool to clear sequential dirt markers from a "
+            "whiteboard tilted 45° around the world Y-axis. The EEF is initialized ~15 cm "
+            "above the board with a +45° pitch rotation so its flat bottom is parallel to the board."
+        ),
+        "geometry": (
+            "Table tilt: 45° pitch around the world Y-axis. "
+            "Surface normal in world frame: [0.707, 0, 0.707]. "
+            "The impedance controller is expressed in the world frame: "
+            "stiffness is [Kx, Ky, Kz] in world-X, world-Y, world-Z axes."
+        ),
+        "physical_dynamics": (
+            "Contact Force Scale: Clearing dirt markers and satisfying the force tracking reward "
+            "requires maintaining ~15 N of contact force against the surface. In impedance control, "
+            "this corresponds to ~1–2 cm of commanded virtual penetration with normal stiffness in "
+            "the 100–150 N/m range. Excessively soft normal stiffness (<30 N/m) fails to clear markers.\n"
+            "Tool Orientation: The flat pad must remain parallel to the 45° incline during sweeping; "
+            "rotational stiffness should be firm (120–180 N·m/rad) to prevent torque-induced pad twisting.\n"
+            "Tangential Motion: Overcoming surface friction to drive the wiping stroke across markers "
+            "requires high tangential stiffness (120–180 N/m)."
+        ),
+        "available_obs": [
+            "EEF position in world frame (xyz)",
+            "Surface contact flag (True/False)",
+            "Relative 3D vector to active target marker [dx, dy, dz]",
+            "Distance to active target marker (metres)",
+            "Individual marker wiped flags (True/False)",
+            "Overall wipe completion fraction [0.0, 1.0]",
+        ],
+        "success_criteria": "All dirt markers cleared on the 45° tilted whiteboard within horizon.",
+        "suggested_phases": ["approach", "wipe"],
+    },
 
     # ── TiltedWipev3 (60°) ───────────────────────────────────────────────────
     # Steeper tilt: surface normal is more asymmetric [0.866, 0, 0.5].
