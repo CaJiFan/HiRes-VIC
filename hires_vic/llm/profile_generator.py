@@ -217,6 +217,33 @@ TASK_SPECS: dict[str, dict] = {
         "success_criteria": "All N dirt markers cleared within the episode horizon.",
         "suggested_phases": ["approach", "transition", "wipe"],
     },
+    "Door": {
+        "name": "Door (Robosuite)",
+        "robot": "7-DOF Panda arm with parallel-jaw gripper",
+        "description": (
+            "The robot must open a door by grasping a handle and pulling/rotating the door "
+            "open. The door swings on a vertical hinge. Success requires rotating the handle "
+            "latch (joint angle > 0.25 rad) and then pulling the door open past the target angle."
+        ),
+        "insertion_axis": "X (primary outward pulling axis)",
+        "geometry": "Door swings around vertical Z hinge axis. Handle latch rotates in YZ plane.",
+        "key_challenges": [
+            "Precision reaching and alignment with the door handle",
+            "Sufficient grasp and rotational compliance to turn the spring-loaded latch",
+            "High pulling stiffness along normal with compliance along circular sweep arc",
+        ],
+        "available_obs": [
+            "EEF position in world frame (xyz)",
+            "Surface contact flag (True/False)",
+            "Door frame position (xyz)",
+            "Handle position (xyz)",
+            "Vector from EEF to handle (xyz) and Euclidean distance",
+            "Handle rotated angle (qpos, rad)",
+            "Door open hinge angle (qpos, rad)",
+        ],
+        "success_criteria": "Door opened past target angle (~0.35 rad).",
+        "suggested_phases": ["approach", "grasp_turn", "pull_open", "swing_through"],
+    },
 }
 
 GENERATOR_SYSTEM_PROMPT = """\

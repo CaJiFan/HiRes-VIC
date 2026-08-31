@@ -1,0 +1,70 @@
+task: Door (Robosuite)
+robot: Panda
+description: >
+  The robot must open a door by grasping a handle, rotating the spring-loaded latch,
+  and pulling the door open along its circular hinge arc. The door swings on a vertical
+  Z-axis hinge. Success requires sufficient rotational authority to turn the spring-loaded
+  latch, followed by strong normal pulling force coupled with compliant arc-following.
+
+phases:
+  approach:
+    # Free-space approach to the door handle.
+    # Balanced moderate stiffness for fast, stable reaching without harsh impact.
+    kp_trans: [60.0, 60.0, 80.0]
+    kp_rot:   [50.0, 50.0, 50.0]
+    description: >
+      Free-space approach to the door handle. Moderate isotropic stiffness
+      ensures stable, responsive reaching while avoiding harsh impact on contact.
+
+  grasp_turn:
+    # Gripper is at the handle; must grasp and overcome the latch return spring.
+    # Firm rotational stiffness provides the torque authority to rotate the spring latch.
+    # Firm translational stiffness holds position securely on the handle.
+    kp_trans: [120.0, 100.0, 100.0]
+    kp_rot:   [100.0, 80.0, 120.0]
+    description: >
+      Grasping and rotating the latch. Firm rotational stiffness provides the
+      torque authority required to overpower the latch return spring. Firm
+      translational stiffness prevents the gripper from slipping off the handle.
+
+  pull_open:
+    # Latch is turned; robot must pull the door open from rest.
+    # High X stiffness provides strong outward pulling force.
+    # Low Y stiffness allows the EEF to compliantly track the circular sweep arc.
+    kp_trans: [180.0, 40.0, 80.0]
+    kp_rot:   [60.0, 40.0, 40.0]
+    description: >
+      Pulling the door open from rest. High normal stiffness (X) provides the
+      sustained pulling force to initiate door motion. Low lateral stiffness (Y)
+      allows the EEF to compliantly follow the door's circular arc without binding.
+
+  swing_through:
+    # Door is partially open; continue sweeping to the target opening angle.
+    # Balanced pulling stiffness maintains smooth continuation while compliant Y follows arc.
+    kp_trans: [120.0, 40.0, 80.0]
+    kp_rot:   [50.0, 40.0, 40.0]
+    description: >
+      Door is already open; continue swinging to target angle. Balanced normal
+      stiffness maintains smooth momentum while compliant Y continues to follow
+      the circular arc without resistance.
+
+planner_prompt: |
+  You are an impedance control expert for a robot opening a door in Robosuite.
+
+  The Panda arm must grasp a door handle, turn the latch, and pull the door
+  open. Translational stiffness is a diagonal 3x3 SPD matrix controlling
+  EEF compliance; rotational stiffness controls orientation compliance.
+
+  Available impedance phases:
+    approach    – EEF is moving toward the handle in free space. No contact yet.
+                  Use when the EEF is not in contact with the door/handle.
+    grasp_turn  – EEF is at the handle; must close gripper and turn the latch.
+                  Use when EEF is near the handle and needs to grasp/rotate it.
+    pull_open   – Latch is turned; robot is pulling door open (door angle < 30 deg).
+                  Use high pulling stiffness to swing door open from rest.
+    swing_through – Door is already open (angle > 30 deg); continue to target angle.
+                  Use when door is partially open and needs continued arc-following.
+
+  You will receive: EEF position, contact flags, door position, handle position, vector to handle (and dist), handle rotated angle, door open hinge angle.
+  Respond with ONLY the exact phase name: approach | grasp_turn | pull_open | swing_through.
+  No explanation, no punctuation — just the phase name.

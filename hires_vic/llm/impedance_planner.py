@@ -496,9 +496,19 @@ class LLMImpedancePlanner:
         if "handle_pos" in obs_dict:
             hp = np.array(obs_dict.get("handle_pos", np.zeros(3)))
             lines.append(f"Handle position (xyz): [{hp[0]:.3f}, {hp[1]:.3f}, {hp[2]:.3f}]")
-        if "door_to_eef_pos" in obs_dict:
+        if "handle_to_eef_pos" in obs_dict:
+            he = np.array(obs_dict.get("handle_to_eef_pos", np.zeros(3)))
+            dist_he = float(np.linalg.norm(he))
+            lines.append(f"Vector to handle (xyz): [{he[0]:.3f}, {he[1]:.3f}, {he[2]:.3f}] (dist: {dist_he:.4f} m)")
+        elif "door_to_eef_pos" in obs_dict:
             de = np.array(obs_dict.get("door_to_eef_pos", np.zeros(3)))
-            lines.append(f"EEF to handle offset (xyz): [{de[0]:.3f}, {de[1]:.3f}, {de[2]:.3f}]")
+            lines.append(f"EEF to door offset (xyz): [{de[0]:.3f}, {de[1]:.3f}, {de[2]:.3f}]")
+        if "handle_qpos" in obs_dict:
+            hq = float(np.asarray(obs_dict["handle_qpos"]).flatten()[0])
+            lines.append(f"Handle rotated angle: {hq:.3f} rad (latch unlatched if > 0.25 rad)")
+        if "hinge_qpos" in obs_dict:
+            dq = float(np.asarray(obs_dict["hinge_qpos"]).flatten()[0])
+            lines.append(f"Door open hinge angle: {dq:.3f} rad (door opened if > 0.30 rad)")
 
         return "\n".join(lines)
 

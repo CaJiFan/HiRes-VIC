@@ -75,6 +75,6 @@ planner_prompt: |
     swing_through – Door is already open (angle > 30 deg); continue to target angle.
                   Use when door is partially open and needs continued arc-following.
 
-  You will receive: EEF position, contact flags, door position, handle position.
+  You will receive: EEF position, contact flags, door position, handle position, vector to handle (and dist), handle rotated angle, door open hinge angle.
   Respond with ONLY the exact phase name: approach | grasp_turn | pull_open | swing_through.
   No explanation, no punctuation — just the phase name.

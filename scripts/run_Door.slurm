@@ -1,13 +1,13 @@
 #!/bin/bash
 #
 # --- Slurm Configuration ---
-#SBATCH --job-name=Door_geo
-#SBATCH --output=logs/door_geo_%j.txt
-#SBATCH --error=logs/door_geo_%j.err
+#SBATCH --job-name=Door_2
+#SBATCH --output=logs/door_spd_%j.txt
+#SBATCH --error=logs/door_spd_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=86
-#SBATCH --mem=80G                            
+#SBATCH --cpus-per-task=96
+#SBATCH --mem=100G                            
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:lovelace:1                 
 
@@ -45,16 +45,19 @@ HORIZON=100
 N_ENVS=16
 LR=3e-4
 BATCH_SIZE=1024
-GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
-# GAMMA=0.98
+# GAMMA=$(awk "BEGIN {print 1 - 1/$HORIZON}")
+GAMMA=0.98
 GAMMA_START=$GAMMA
 SEEDS=(0 1 2 3 4)
 
 # ── LLM prior schedule ────────────────────────────────────────────────────────
-LLM_W_INIT=0.60
-LLM_W_FLOOR=0.60
+LLM_PROFILE="configs/door_impedance_profile.yaml"
+# LLM_PROFILE="configs/door_impedance_profile_v2.yaml"
+LLM_W_INIT=0.20
+LLM_W_FLOOR=$LLM_W_INIT
+LLM_ANNEAL_SCHEDULE="cosine"
 LLM_ANNEAL=0
-LLM_BACKEND=""
+LLM_BACKEND="ollama"
 LLM_MODEL="llama3.2"
 LLM_QUERY_INTERVAL=10
 
@@ -145,6 +148,8 @@ run_llm() {
         --horizon "$HORIZON"
         --n_envs "$N_ENVS"
         --gamma "$GAMMA"
+        --gamma_start "$GAMMA_START"
+        --batch_size "$BATCH_SIZE"
         --seed "$SEED"
         --lr "$LR"
         --record_video
@@ -152,13 +157,14 @@ run_llm() {
         --primitive_init none
         # LLM prior flags
         --use_llm_prior
+        --llm_profile "$LLM_PROFILE"
         --llm_backend "$LLM_BACKEND"
         --llm_model "$LLM_MODEL"
         --llm_prior_weight "$LLM_W_INIT"
         --llm_anneal_steps "$LLM_ANNEAL"
         --llm_anneal_floor "$LLM_W_FLOOR"
         --llm_query_interval "$LLM_QUERY_INTERVAL"
-        # profile auto-selected by train_fixed.py for Door
+        --llm_anneal_schedule "$LLM_ANNEAL_SCHEDULE"
     )
     [ "$USE_SPD" == "TRUE" ] && ARGS+=(--use_spd)
     [ "$USE_LIE" == "TRUE" ] && ARGS+=(--use_lie)
@@ -215,7 +221,7 @@ for SEED in "${SEEDS[@]}"; do
 
     # # 1. BASELINE — diagonal variable_kp, Euclidean obs
     # wait_for_queue
-    # run_geo "FALSE" "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}_HCET" "$SEED" &
+    # run_geo "FALSE" "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}_HCET_2" "$SEED" &
     # TRAIN_PIDS+=($!)
 
     # # 2. DIAG — diagonal SPD (log-scale exponential map)
@@ -223,20 +229,20 @@ for SEED in "${SEEDS[@]}"; do
     # run_geo "FALSE" "FALSE" "TRUE"  "DOOR_DIAG_ONLY_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}" "$SEED" &
     # TRAIN_PIDS+=($!)
 
-    # 3. SPD_ONLY — full 3×3 SPD manifold
+    # # 3. SPD_ONLY — full 3×3 SPD manifold
+    # wait_for_queue
+    # run_geo "TRUE"  "FALSE" "FALSE" "DOOR_SPD_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}_HCET" "$SEED" &
+    # TRAIN_PIDS+=($!)
+
+    # # 6. BASELINE with LLM v3
+    # wait_for_queue
+    # run_llm "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_LLMv3_W${LLM_W_INIT}_G${GAMMA}_HCET" "$SEED" &
+    # TRAIN_PIDS+=($!)
+
+    # 7. SPD with LLM v3
     wait_for_queue
-    run_geo "TRUE"  "FALSE" "FALSE" "DOOR_SPD_ICRA_LR${LR}_H${HORIZON}_G${GAMMA}_HCET" "$SEED" &
+    run_llm "TRUE"  "FALSE" "DOOR_SPD_ICRA_LR${LR}_H${HORIZON}_LLMv3_W${LLM_W_INIT}_G${GAMMA}_HCET" "$SEED" &
     TRAIN_PIDS+=($!)
-
-    # # 6. BASELINE with LLM
-    # wait_for_queue
-    # run_llm "FALSE" "FALSE" "DOOR_BASELINE_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
-    # TRAIN_PIDS+=($!)
-
-    # # 7. SPD with LLM
-    # wait_for_queue
-    # run_llm "TRUE"  "FALSE" "DOOR_SPD_ONLY_ICRA_LR${LR}_H${HORIZON}_LLM_W${LLM_W_INIT}_G${GAMMA}" "$SEED" &
-    # TRAIN_PIDS+=($!)
 
 done
 

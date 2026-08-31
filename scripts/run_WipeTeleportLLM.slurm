@@ -61,7 +61,7 @@ GAMMA_START=0.95   # curriculum: start here, anneal to GAMMA by 50% of training
 # ── LLM-related hparams ────────────────────────────────────────────────────────
 LLM_W_INIT=0.70
 # LLM_W_FLOOR=0.50
-LLM_W_FLOOR=$LLM_W_INIT            
+LLM_W_FLOOR=$LLM_W_INIT         
 LLM_ANNEAL_SCHEDULE="cosine"
 # LLM_ANNEAL=$((STEPS * 50 / 100 / N_ENVS))
 LLM_ANNEAL=0
