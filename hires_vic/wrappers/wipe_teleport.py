@@ -39,12 +39,14 @@ class WipeTeleportWrapper(gym.Wrapper):
         hover_dist: float = 0.15,
         table_body_name: str = "table",
         is_eval: bool = False,
+        randomize_pose: bool = False,
     ):
         super().__init__(env)
         self.tilt_angle_deg = tilt_angle_deg
         self.hover_dist = hover_dist
         self.table_body_name = table_body_name
         self.is_eval = is_eval
+        self.randomize_pose = randomize_pose
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -57,36 +59,34 @@ class WipeTeleportWrapper(gym.Wrapper):
     def _compute_hover_target(self, sim) -> np.ndarray:
         """
         Return a world-frame 3-D hover target ~hover_dist above the
-        tilted table's upper surface centre.
-
-        Strategy
-        --------
-        1. Try to read the table body centroid directly from the sim.
-        2. Fall back to the hard-coded task_config geometry.
+        tilted table's upper surface centre, with optional DR offsets.
         """
-        tilt_rad = np.radians(self.tilt_angle_deg)
-
-        # Surface normal for a table pitched around the Y axis by tilt_rad:
-        # normal = R_y(tilt_rad) @ [0, 0, 1] = [sin(tilt), 0, cos(tilt)]
-        normal = np.array([np.sin(tilt_rad), 0.0, np.cos(tilt_rad)])
-
-        # --- 1. Sim-based: read table body centroid --------------------
+        # --- 1. Sim-based: read table body centroid & orientation -------
         try:
             body_id = sim.model.body_name2id(self.table_body_name)
             table_centre = np.array(sim.data.body_xpos[body_id], dtype=float)
-            hover_target = table_centre + self.hover_dist * normal
-            print(
-                f"[WipeTeleport] Sim-based hover target: {hover_target} "
-                f"(table centre: {table_centre})"
-            )
+            table_xmat = sim.data.body_xmat[body_id].reshape(3, 3)
+            normal = table_xmat @ np.array([0.0, 0.0, 1.0])
+            tangent_x = table_xmat @ np.array([1.0, 0.0, 0.0])
+            tangent_y = table_xmat @ np.array([0.0, 1.0, 0.0])
+
+            if self.randomize_pose:
+                d_hover = float(np.random.uniform(0.10, 0.20))
+                dy = float(np.random.uniform(-0.06, 0.06))
+                dx = float(np.random.uniform(-0.03, 0.03))
+                hover_target = table_centre + d_hover * normal + dy * tangent_y + dx * tangent_x
+            else:
+                hover_target = table_centre + self.hover_dist * normal
+
             return hover_target
         except Exception as e:
-            print(f"[WipeTeleport] Sim-based table lookup failed ({e}), using config fallback.")
+            pass
 
         # --- 2. Config fallback: use known table_offset from task_config -
+        tilt_rad = np.radians(self.tilt_angle_deg)
+        normal = np.array([np.sin(tilt_rad), 0.0, np.cos(tilt_rad)])
         table_centre_fallback = np.array([0.15, 0.0, 0.925])
         hover_target = table_centre_fallback + self.hover_dist * normal
-        print(f"[WipeTeleport] Config-fallback hover target: {hover_target}")
         return hover_target
 
     def _teleport_eef_to(self, sim, target_pos: np.ndarray) -> bool:
@@ -150,12 +150,22 @@ class WipeTeleportWrapper(gym.Wrapper):
                 except Exception:
                     continue
 
-            # Target 6D pose: 3D position + 45-degree pitch orientation parallel to tilted table surface
+            # Target 6D pose: 3D position + pitch orientation parallel to tilted table surface
             from scipy.spatial.transform import Rotation as R
-            tilt_rad = np.radians(self.tilt_angle_deg)
-            r_y = R.from_euler('y', tilt_rad).as_matrix()
             base_rot = np.array([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
-            target_rot = r_y @ base_rot
+            try:
+                body_id = sim.model.body_name2id(self.table_body_name)
+                table_xmat = sim.data.body_xmat[body_id].reshape(3, 3)
+            except Exception:
+                tilt_rad = np.radians(self.tilt_angle_deg)
+                table_xmat = R.from_euler('y', tilt_rad).as_matrix()
+
+            if self.randomize_pose:
+                r_jitter = R.from_euler('xyz', np.random.uniform(-5.0, 5.0, size=3), degrees=True).as_matrix()
+            else:
+                r_jitter = np.eye(3)
+
+            target_rot = table_xmat @ r_jitter @ base_rot
 
             # Multi-iteration Jacobian IK to accurately reach target hover position & orientation
             for _ in range(35):
@@ -315,6 +325,7 @@ class WipeDomainRandomizationWrapper(gym.Wrapper):
         randomize_friction: bool = False,
         table_body_name: str = "table",
         table_geom_name: str = "table_collision",
+        is_eval: bool = False,
     ):
         super().__init__(env)
         self.tilt_min_deg = tilt_min_deg
@@ -323,6 +334,7 @@ class WipeDomainRandomizationWrapper(gym.Wrapper):
         self.randomize_friction = randomize_friction
         self.table_body_name = table_body_name
         self.table_geom_name = table_geom_name
+        self.is_eval = is_eval
 
         # Store original geom sizes to scale relative to nominal each episode
         self._nominal_geom_sizes: dict = {}
@@ -385,24 +397,21 @@ class WipeDomainRandomizationWrapper(gym.Wrapper):
         # --- Sample randomization parameters ---------------------------
         tilt_deg = float(np.random.uniform(self.tilt_min_deg, self.tilt_max_deg))
         size_scale = float(np.random.uniform(self.size_scale_min, 1.0))
+        friction_scale = float(np.random.uniform(0.5, 1.5)) if self.randomize_friction else 1.0
 
         # --- Apply -------------------------------------------------------
         self._apply_tilt(sim, tilt_deg)
         self._apply_size_scale(sim, size_scale)
-
-        if self.randomize_friction:
-            friction_scale = float(np.random.uniform(0.5, 1.5))
-            self._apply_friction(sim, friction_scale)
-        else:
-            friction_scale = 1.0
+        self._apply_friction(sim, friction_scale)
 
         sim.forward()
 
-        print(
-            f"[WipeDR] Episode DR: tilt={tilt_deg:.1f}°, "
-            f"size_scale={size_scale:.2f}, "
-            f"friction_scale={friction_scale:.2f}"
-        )
+        if not self.is_eval:
+            print(
+                f"[WipeDR] Episode DR: tilt={tilt_deg:.1f}°, "
+                f"size_scale={size_scale:.2f}, "
+                f"friction_scale={friction_scale:.2f}"
+            )
 
         info["dr/tilt_deg"] = tilt_deg
         info["dr/size_scale"] = size_scale

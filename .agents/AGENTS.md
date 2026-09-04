@@ -42,6 +42,10 @@ Specifically:
   - Native centroid-reaching (`distance_multiplier`) and un-gated contact (`wipe_contact_reward`) are set to `0.0` in `configs/wipe_task_config.yaml`.
   - Checkpoint-gated quality reward (`r_guide`, `r_con_q`, `r_force_q`) with Gaussian force tracking ($F_{\text{target}} = 15\text{ N}$).
   - Quality reward is scaled by `reward_scale * reward_normalization_factor` ($\approx 0.0375$) to prevent dominating ground-truth wipe events ($50.0 \to 1.875$).
+* **Domain Randomization (`--use_domain_rand`)**:
+  - **Pose DR (`WipeTeleportWrapper`)**: $d_{\text{hover}} \in [10, 20]\text{ cm}$, $\Delta y \in [-6, +6]\text{ cm}$, $\Delta x \in [-3, +3]\text{ cm}$, orientation jitter $\pm 5^\circ$.
+  - **Environment DR (`WipeDomainRandomizationWrapper`)**: Tilt angle $\theta_{\text{tilt}} \in [38^\circ, 52^\circ]$, scale $\in [0.7, 1.0]$, friction $\pm 50\%$.
+  - **Evaluation Behavior**: Evaluates on the DR distribution with a fixed random seed (`seed=42`) across checkpoints for reproducible, representative generalization benchmarking.
 * **Hyperparameters**: Fixed $\gamma = 0.95$, Horizon $= 150$, Batch Size $= 1024$, LR $= 3\times 10^{-4}$.
 ## High-Quality Wiping Paper Reference
 * **arXiv Citation**: [arXiv:2502.12599](https://arxiv.org/abs/2502.12599)

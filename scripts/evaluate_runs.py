@@ -110,28 +110,26 @@ class ObservationAlignWrapper(gym.ObservationWrapper):
         if observation.shape[0] == self.expected_dim:
             return observation
         
-        # If it doesn't match, we assume the mismatch is in the flat_obs part,
-        # and that the extra_obs_dim was originally exactly `prior_dim` instead of `prior_dim + 1` 
-        # (or some other small difference in the raw robosuite state).
-        
-        # We know current env has `self.extra_obs_dim` appended at the end.
-        current_flat_len = observation.shape[0] - self.extra_obs_dim
-        
-        # We need to extract the prior_dim part (ignoring current_w which is at the very end)
-        prior_dim = self.extra_obs_dim - 1
-        prior_state = observation[current_flat_len : current_flat_len + prior_dim]
-        
-        # The expected flat_obs length is expected_dim - prior_dim
-        expected_flat_len = self.expected_dim - prior_dim
-        
-        # Truncate or pad the base flat_obs to match expected_flat_len
-        base_obs = observation[:current_flat_len]
-        if len(base_obs) > expected_flat_len:
-            base_obs = base_obs[:expected_flat_len]
-        else:
-            base_obs = np.pad(base_obs, (0, expected_flat_len - len(base_obs)))
+        # If the environment appends extra prior state dimensions
+        if self.extra_obs_dim > 0:
+            current_flat_len = observation.shape[0] - self.extra_obs_dim
+            prior_dim = self.extra_obs_dim - 1
+            prior_state = observation[current_flat_len : current_flat_len + prior_dim]
+            expected_flat_len = self.expected_dim - prior_dim
             
-        aligned_obs = np.concatenate([base_obs, prior_state]).astype(np.float32)
+            base_obs = observation[:current_flat_len]
+            if len(base_obs) > expected_flat_len:
+                base_obs = base_obs[:expected_flat_len]
+            else:
+                base_obs = np.pad(base_obs, (0, expected_flat_len - len(base_obs)))
+                
+            aligned_obs = np.concatenate([base_obs, prior_state]).astype(np.float32)
+        else:
+            if len(observation) > self.expected_dim:
+                aligned_obs = observation[:self.expected_dim].astype(np.float32)
+            else:
+                aligned_obs = np.pad(observation, (0, self.expected_dim - len(observation))).astype(np.float32)
+                
         return aligned_obs
 
 class ActionAlignWrapper(gym.ActionWrapper):
@@ -210,13 +208,26 @@ def make_env(env_name, config_name, model_path=None):
         "horizon": 230 if env_name == "NutAssemblySquare" else (50 if env_name == "Door" else 150),
     }
 
-    if "TILTED" in env_name.upper():
-        kwargs["task_config"] = WIPE_TASK_CONFIG
+    if "TILTED" in env_name.upper() or "WIPE" in env_name.upper():
+        wipe_config = WIPE_TASK_CONFIG.copy()
+        nm_match = re.search(r"_NM(\d+)", config_name)
+        if nm_match:
+            wipe_config["num_markers"] = int(nm_match.group(1))
+        else:
+            wipe_config["num_markers"] = 5
+            
+        exp_dim = get_expected_obs_dim(model_path) if model_path else None
+        if exp_dim == 58:
+            wipe_config["use_condensed_obj_obs"] = True
+        else:
+            wipe_config["use_condensed_obj_obs"] = False
+            
+        kwargs["task_config"] = wipe_config
 
     env = suite.make(**kwargs)
     env = GymWrapper(env)
     
-    if "TILTED" in env_name.upper():
+    if "TILTED" in env_name.upper() or "WIPE" in env_name.upper():
         if "DOMAINRAND" in config_name:
             env = WipeDomainRandomizationWrapper(
                 env,
@@ -225,7 +236,7 @@ def make_env(env_name, config_name, model_path=None):
                 size_scale_min=0.7,
                 randomize_friction=True,
             )
-        env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.30)
+        env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.15, is_eval=True)
     
     if "NutAssemblySquare" in env_name:
         env = RobosuiteTeleportWrapper(env, setup_steps=150, is_eval=True)
@@ -257,7 +268,6 @@ def make_env(env_name, config_name, model_path=None):
 
     llm_weight = 0.05 if "NutAssembly" in env_name else 0.4
     if use_llm:
-        import re
         w_match = re.search(r"_W(\d+\.\d+)_", config_name)
         if w_match:
             llm_weight = float(w_match.group(1))
@@ -278,7 +288,9 @@ def make_env(env_name, config_name, model_path=None):
         llm_anneal_floor=llm_weight,
         llm_model="llama3.2",
         llm_query_interval=10,
-        llm_profile_path=profile_path
+        llm_profile_path=profile_path,
+        use_quality_reward=True,
+        use_sequential_waypoints=True,
     )
     
     if model_path:

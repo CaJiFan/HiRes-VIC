@@ -110,28 +110,25 @@ class ObservationAlignWrapper(gym.ObservationWrapper):
         if observation.shape[0] == self.expected_dim:
             return observation
         
-        # If it doesn't match, we assume the mismatch is in the flat_obs part,
-        # and that the extra_obs_dim was originally exactly `prior_dim` instead of `prior_dim + 1` 
-        # (or some other small difference in the raw robosuite state).
-        
-        # We know current env has `self.extra_obs_dim` appended at the end.
-        current_flat_len = observation.shape[0] - self.extra_obs_dim
-        
-        # We need to extract the prior_dim part (ignoring current_w which is at the very end)
-        prior_dim = self.extra_obs_dim - 1
-        prior_state = observation[current_flat_len : current_flat_len + prior_dim]
-        
-        # The expected flat_obs length is expected_dim - prior_dim
-        expected_flat_len = self.expected_dim - prior_dim
-        
-        # Truncate or pad the base flat_obs to match expected_flat_len
-        base_obs = observation[:current_flat_len]
-        if len(base_obs) > expected_flat_len:
-            base_obs = base_obs[:expected_flat_len]
-        else:
-            base_obs = np.pad(base_obs, (0, expected_flat_len - len(base_obs)))
+        if self.extra_obs_dim > 0:
+            current_flat_len = observation.shape[0] - self.extra_obs_dim
+            prior_dim = self.extra_obs_dim - 1
+            prior_state = observation[current_flat_len : current_flat_len + prior_dim]
+            expected_flat_len = self.expected_dim - prior_dim
             
-        aligned_obs = np.concatenate([base_obs, prior_state]).astype(np.float32)
+            base_obs = observation[:current_flat_len]
+            if len(base_obs) > expected_flat_len:
+                base_obs = base_obs[:expected_flat_len]
+            else:
+                base_obs = np.pad(base_obs, (0, expected_flat_len - len(base_obs)))
+                
+            aligned_obs = np.concatenate([base_obs, prior_state]).astype(np.float32)
+        else:
+            if len(observation) > self.expected_dim:
+                aligned_obs = observation[:self.expected_dim].astype(np.float32)
+            else:
+                aligned_obs = np.pad(observation, (0, self.expected_dim - len(observation))).astype(np.float32)
+                
         return aligned_obs
 
 class ActionAlignWrapper(gym.ActionWrapper):

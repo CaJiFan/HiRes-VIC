@@ -398,9 +398,16 @@ def make_video_env(args):
                 tilt_max_deg=52.0,
                 size_scale_min=0.7,
                 randomize_friction=True,
+                is_eval=is_eval,
             )
         if getattr(args, 'primitive_init', 'none') in ('teleport', 'both'):
-            env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.15, is_eval=is_eval)
+            env = WipeTeleportWrapper(
+                env,
+                tilt_angle_deg=45.0,
+                hover_dist=0.15,
+                is_eval=is_eval,
+                randomize_pose=getattr(args, 'use_domain_rand', False),
+            )
     
     # ✅ Auto-select profile: VLM overrides, then env-specific defaults
     llm_profile_path = args.llm_profile
@@ -556,9 +563,16 @@ def make_env(args, is_eval=False, rank=0, seed=0):
                     tilt_max_deg=52.0,
                     size_scale_min=0.7,
                     randomize_friction=True,
+                    is_eval=is_eval,
                 )
             if getattr(args, 'primitive_init', 'none') in ('teleport', 'both'):
-                env = WipeTeleportWrapper(env, tilt_angle_deg=45.0, hover_dist=0.15, is_eval=is_eval)
+                env = WipeTeleportWrapper(
+                    env,
+                    tilt_angle_deg=45.0,
+                    hover_dist=0.15,
+                    is_eval=is_eval,
+                    randomize_pose=getattr(args, 'use_domain_rand', False),
+                )
         
         # ✅ Auto-select profile: VLM overrides, then env-specific defaults
         llm_profile_path = args.llm_profile
